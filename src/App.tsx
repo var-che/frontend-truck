@@ -1,26 +1,39 @@
 import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { DatePicker } from 'antd';
+import Dashboard from './components/Dashboard';
+import { fetchGreeting } from './api';
 
-function App() {
+const App: React.FC = () => {
+  const [greeting, setGreeting] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const getGreeting = async () => {
+      try {
+        const data = await fetchGreeting();
+        setGreeting(data.hello);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+
+    getGreeting();
+  }, []);
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/" element={
+          <div style={{ textAlign: 'center', marginTop: '50px' }}>
+            <h1>React Frontend with Fastify Backend</h1>
+            <h2>{greeting ? `Backend says: ${greeting}` : 'Loading...'}</h2>
+            <DatePicker />
+          </div>
+        } />
+      </Routes>
+    </Router>
   );
-}
+};
 
 export default App;
