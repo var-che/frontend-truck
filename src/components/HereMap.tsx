@@ -1,54 +1,50 @@
-import React, { useEffect, useRef } from 'react';
-import H from '@here/maps-api-for-javascript';
+import { useRef } from 'react';
+import { HMap, HMapPolyline } from "react-here-map";
 
-const HereMap: React.FC = () => {
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const map = useRef<H.Map | null>(null);
-  const platform = useRef<H.service.Platform | null>(null);
+const HereMap = ({ apiKey, points }: { apiKey: string, points: { lat: number, lng: number }[] }) => {
 
-  useEffect(() => {
-    if (!map.current && mapRef.current) {
-      try {
-        platform.current = new H.service.Platform({
-          apikey: 'dT5AXa07Et19QuFHBKyQ2X-C0gBE5Qkj6-d7YkJYAU',
-        });
+  const mapRef = useRef(null);
+  console.log(mapRef, 'map ref');
+  return (
+    <>
+      <div style={{ height: "80vh", overflow: "hidden" }}>
 
-        const defaultLayers = platform.current.createDefaultLayers() as any;
-
-        if (defaultLayers.vector) {
-          const newMap = new H.Map(
-            mapRef.current,
-            defaultLayers.vector.normal.map,
-            {
-              zoom: 14,
-              center: {
-                lat: 64.144,
-                lng: -21.94,
-              },
+        <HMap
+          ref={mapRef}
+          key={1}
+          options={{
+            center: {
+              lat: 52,
+              lng: 5
             },
-          );
-
-          // Set the map object to the reference
-          map.current = newMap;
-
-          const behavior = new H.mapevents.Behavior(
-            new H.mapevents.MapEvents(newMap),
-          );
-          const ui = H.ui.UI.createDefault(newMap, defaultLayers);
-
-          return () => {
-            newMap.dispose();
-          };
-        } else {
-          console.error('Vector layers are not available.');
-        }
-      } catch (error) {
-        console.error('Error initializing the HERE map:', error);
-      }
-    }
-  }, []);
-
-  return <div ref={mapRef} style={{ width: '100%', height: '80vh' }} />;
+            build: true
+          }}
+          style={{
+            height: '100%',
+            width: '100%',
+            position: 'relative',
+            top: "-100%"
+          }}
+        >
+          {points.length > 1 && <HMapPolyline
+            events={{
+              pointerdown: function noRefCheck() { },
+              pointerenter: function noRefCheck() { },
+              pointerleave: function noRefCheck() { },
+              pointermove: function noRefCheck() { }
+            } as any}
+            options={{
+              style: {
+                lineWidth: 4
+              }
+            }}
+            points={points}
+            setViewBounds={true}
+          />}
+        </HMap>
+      </div>
+    </>
+  )
 };
 
 export default HereMap;

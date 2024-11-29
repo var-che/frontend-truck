@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { DatePicker } from 'antd';
 import Dashboard from './components/Dashboard';
 import { fetchGreeting } from './api';
-import HereMap from './components/HereMap';
+import MapDashboard from './components/MapDashboard';
+import { HPlatform } from 'react-here-map';
 
 const App: React.FC = () => {
   const [greeting, setGreeting] = React.useState<string | null>(null);
@@ -31,8 +32,18 @@ const App: React.FC = () => {
             <div style={{ textAlign: 'center', marginTop: '50px' }}>
               <h1>React Frontend with Fastify Backend</h1>
               <h2>{greeting ? `Backend says: ${greeting}` : 'Loading...'}</h2>
-              <HereMap />
-              <DatePicker />
+              <HPlatform
+                options={{
+                  apiKey: "TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew",
+                  includePlaces: false,
+                  includeUI: false,
+                  interactive: true,
+                  version: 'v3/3.1'
+                }}
+              >
+                <MapDashboard />
+              </HPlatform>
+              {/* <DatePicker /> */}
             </div>
           }
         />
