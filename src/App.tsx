@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { DatePicker } from 'antd';
 import Dashboard from './components/Dashboard';
 import { fetchGreeting } from './api';
+import HereMap from './components/HereMap';
 
 const App: React.FC = () => {
   const [greeting, setGreeting] = React.useState<string | null>(null);
@@ -24,13 +25,17 @@ const App: React.FC = () => {
     <Router>
       <Routes>
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/" element={
-          <div style={{ textAlign: 'center', marginTop: '50px' }}>
-            <h1>React Frontend with Fastify Backend</h1>
-            <h2>{greeting ? `Backend says: ${greeting}` : 'Loading...'}</h2>
-            <DatePicker />
-          </div>
-        } />
+        <Route
+          path="/"
+          element={
+            <div style={{ textAlign: 'center', marginTop: '50px' }}>
+              <h1>React Frontend with Fastify Backend</h1>
+              <h2>{greeting ? `Backend says: ${greeting}` : 'Loading...'}</h2>
+              <HereMap />
+              <DatePicker />
+            </div>
+          }
+        />
       </Routes>
     </Router>
   );
