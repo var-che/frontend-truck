@@ -1,162 +1,122 @@
-import React, { useState, useEffect } from 'react';
-import { Collapse, Input, Button, List } from 'antd';
-import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Collapse, List, AutoComplete } from 'antd';
+import { CloseOutlined } from '@ant-design/icons';
+import { debounce } from 'lodash';
 
 const { Panel } = Collapse;
 
-interface SortableItemProps {
-  id: string;
-  index: number;
-  handleRemoveWaypoint: (index: number) => void;
+interface CityOption {
+  value: string;
+  label: string;
+  lat: number;
+  lng: number;
 }
 
-const SortableItem: React.FC<SortableItemProps> = ({
-  id,
-  index,
-  handleRemoveWaypoint,
-}) => {
-  const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <List.Item
-        actions={[
-          <CloseOutlined
-            key="delete"
-            onClick={() => handleRemoveWaypoint(index)}
-          />,
-        ]}
-      >
-        {id}
-      </List.Item>
-    </div>
-  );
-};
-
-const TripWaypoints: React.FC<{ driverId: string }> = ({ driverId }) => {
-  const [waypoints, setWaypoints] = useState<string[]>([]);
+const TripWaypoints: React.FC<{
+  waypoints: { lat: number; lng: number }[];
+  onPointsChange: (points: { lat: number; lng: number }[]) => void;
+}> = ({ waypoints = [], onPointsChange }) => {
+  const [options, setOptions] = useState<CityOption[]>([]);
   const [inputValue, setInputValue] = useState<string>('');
+  const apiKey = 'TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew';
 
   useEffect(() => {
-    const savedWaypoints = localStorage.getItem(`waypoints-${driverId}`);
-    if (savedWaypoints) {
-      setWaypoints(JSON.parse(savedWaypoints));
-    }
-  }, [driverId]);
+    console.log('TripWaypoints received new waypoints:', waypoints);
+  }, [waypoints]);
 
-  const saveWaypoints = (newWaypoints: string[]) => {
-    setWaypoints(newWaypoints);
-    localStorage.setItem(`waypoints-${driverId}`, JSON.stringify(newWaypoints));
-  };
+  const fetchCitySuggestions = useCallback(
+    debounce(async (query: string) => {
+      if (!query) return;
 
-  const handleAddWaypoint = () => {
-    if (inputValue.trim()) {
-      const newWaypoints = [...waypoints, inputValue.trim()];
-      saveWaypoints(newWaypoints);
-      setInputValue('');
-    }
-  };
+      const url = `https://geocode.search.hereapi.com/v1/geocode?q=${query}&apikey=${apiKey}`;
+      const response = await fetch(url);
+      const data = await response.json();
 
-  const handleRemoveWaypoint = (index: number) => {
-    const newWaypoints = waypoints.filter((_, i) => i !== index);
-    saveWaypoints(newWaypoints);
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value);
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleAddWaypoint();
-    }
-  };
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
+      setOptions(
+        data.items.map((item: any) => ({
+          value: item.address.label,
+          label: item.address.label,
+          lat: item.position.lat,
+          lng: item.position.lng,
+        })),
+      );
+    }, 300), // 300ms debounce delay
+    [apiKey],
   );
 
-  const handleDragEnd = (event: { active: any; over: any }) => {
-    const { active, over } = event;
+  const onSearch = (searchText: string) => {
+    fetchCitySuggestions(searchText);
+  };
 
-    if (active.id !== over.id) {
-      const newWaypoints = arrayMove(
-        waypoints,
-        waypoints.indexOf(active.id),
-        waypoints.indexOf(over.id),
-      );
-      saveWaypoints(newWaypoints);
+  const onSelectCity = (value: string, option: any) => {
+    console.log('Selection method triggered:', { value, option });
+
+    if (!option || !option.lat || !option.lng) {
+      console.warn('Invalid option selected:', option);
+      return;
     }
+
+    const newWaypoints = [
+      ...waypoints,
+      {
+        lat: option.lat,
+        lng: option.lng,
+      },
+    ];
+
+    onPointsChange(newWaypoints);
+    setInputValue(''); // Clear input after selection
+  };
+
+  const handleRemoveWaypoint = (index: number, e: React.MouseEvent) => {
+    // Prevent event from bubbling up
+    e.stopPropagation();
+
+    // Create new array without the waypoint at specified index
+    const newWaypoints = [...waypoints];
+    newWaypoints.splice(index, 1);
+
+    // Call the parent's callback with updated waypoints
+    onPointsChange(newWaypoints);
+  };
+
+  const handleInputChange = (value: string) => {
+    setInputValue(value);
   };
 
   return (
     <Collapse defaultActiveKey={['1']}>
-      <Panel header="Trip Waypoints" key="1">
+      <Panel header={`Trip Waypoints (${waypoints.length})`} key="1">
         <div style={{ padding: '10px' }}>
-          <Input
-            size="small"
+          <AutoComplete
+            style={{ width: '100%', marginBottom: '10px' }}
             placeholder="Enter city name"
             value={inputValue}
-            onChange={handleInputChange}
-            onKeyPress={handleKeyPress}
-            style={{ marginBottom: '10px' }}
-            suffix={
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                size="small"
-                onClick={handleAddWaypoint}
-              />
-            }
+            onChange={setInputValue}
+            onSearch={onSearch}
+            onSelect={(value, option) => onSelectCity(value, option)}
+            options={options.map((option) => ({
+              ...option,
+              key: `${option.lat}-${option.lng}`, // Add unique key
+            }))}
           />
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={waypoints}
-              strategy={verticalListSortingStrategy}
-            >
-              {waypoints.map((item, index) => (
-                <SortableItem
-                  key={item}
-                  id={item}
-                  index={index}
-                  handleRemoveWaypoint={handleRemoveWaypoint}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
+          <List
+            size="small"
+            bordered
+            dataSource={waypoints}
+            renderItem={(item, index) => (
+              <List.Item
+                actions={[
+                  <CloseOutlined
+                    key="delete"
+                    onClick={(e) => handleRemoveWaypoint(index, e)}
+                  />,
+                ]}
+              >
+                {`Lat: ${item.lat}, Lng: ${item.lng}`}
+              </List.Item>
+            )}
+          />
         </div>
       </Panel>
     </Collapse>

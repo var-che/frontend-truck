@@ -4,6 +4,7 @@ import { Button, Card, Row, Col } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
 import TruckInformation from './TruckInformation';
 import TripWaypoints from './TripWaypoints';
+import HereMap from './HereMap';
 
 interface ElementState {
   id: string;
@@ -13,6 +14,7 @@ interface ElementState {
   content: string;
   zIndex: number;
   driverName: string;
+  points: Array<{ lat: number; lng: number }>;
 }
 
 const CanvasDashboard: React.FC = () => {
@@ -22,13 +24,20 @@ const CanvasDashboard: React.FC = () => {
   useEffect(() => {
     const savedElements = localStorage.getItem('canvas-elements');
     if (savedElements) {
-      const parsedElements = JSON.parse(savedElements);
-      setElements(parsedElements);
-      const maxZ = Math.max(
-        ...parsedElements.map((el: ElementState) => el.zIndex),
-        0,
-      );
-      setMaxZIndex(maxZ);
+      try {
+        const parsedElements = JSON.parse(savedElements);
+
+        // Initialize or preserve points array
+        const elementsWithPoints = parsedElements.map((el: ElementState) => ({
+          ...el,
+          points: Array.isArray(el.points) ? [...el.points] : [],
+        }));
+
+        console.log('Loading elements with points:', elementsWithPoints);
+        setElements(elementsWithPoints);
+      } catch (error) {
+        console.error('Error loading elements:', error);
+      }
     }
   }, []);
 
@@ -58,6 +67,33 @@ const CanvasDashboard: React.FC = () => {
     localStorage.setItem('canvas-elements', JSON.stringify(updatedElements));
   };
 
+  const handlePointsChange = (
+    id: string,
+    points: { lat: number; lng: number }[],
+  ) => {
+    console.log('Points update requested:', { id, points });
+
+    const updatedElements = elements.map((el) =>
+      el.id === id
+        ? {
+            ...el,
+            points: [...points],
+          }
+        : el,
+    );
+
+    // Force state update
+    setElements((prevElements) => {
+      console.log('State update:', {
+        prev: prevElements,
+        next: updatedElements,
+      });
+      return [...updatedElements];
+    });
+
+    // Ensure localStorage update
+    localStorage.setItem('canvas-elements', JSON.stringify(updatedElements));
+  };
   const addElement = () => {
     const newElement: ElementState = {
       id: `element-${Date.now()}`,
@@ -67,6 +103,7 @@ const CanvasDashboard: React.FC = () => {
       content: 'Drag me',
       zIndex: maxZIndex + 1,
       driverName: '',
+      points: [],
     };
     const updatedElements = [...elements, newElement];
     setElements(updatedElements);
@@ -138,10 +175,20 @@ const CanvasDashboard: React.FC = () => {
                       handleDriverNameChange(el.id, value)
                     }
                   />
-                  <TripWaypoints driverId={el.id} />
+                  <TripWaypoints
+                    key={`waypoints-${el.id}-${el.points.length}`}
+                    waypoints={el.points}
+                    onPointsChange={(points) =>
+                      handlePointsChange(el.id, points)
+                    }
+                  />
                 </Col>
                 <Col span={12}>
-                  <div style={{ padding: '10px' }}>Right-Card-Panel</div>
+                  <HereMap
+                    key={`map-${el.id}-${el.points.length}`}
+                    apiKey="YOUR_HERE_MAPS_API_KEY"
+                    points={el.points}
+                  />
                 </Col>
               </Row>
             </Card>

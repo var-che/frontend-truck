@@ -1,11 +1,11 @@
-import { AutoComplete } from "antd";
-import { debounce } from "lodash";
-import { useCallback, useContext, useMemo, useState } from "react";
-import HereMap from "./HereMap";
+import { AutoComplete } from 'antd';
+import { debounce } from 'lodash';
+import { useCallback, useContext, useMemo, useState } from 'react';
+import HereMap from './HereMap';
 interface CityOption {
   value: string; // City name
-  lat: number;   // Latitude
-  lng: number;   // Longitude
+  lat: number; // Latitude
+  lng: number; // Longitude
 }
 
 interface City {
@@ -14,7 +14,7 @@ interface City {
   lng: number;
 }
 export default function MapDashboard() {
-  const apiKey = "TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew";
+  const apiKey = 'TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew';
   const [origin, setOrigin] = useState<City | null>(null);
   const [destination, setDestination] = useState<City | null>(null);
   const [options, setOptions] = useState<CityOption[]>([]);
@@ -32,13 +32,17 @@ export default function MapDashboard() {
           value: item.address.label,
           lat: item.position.lat,
           lng: item.position.lng,
-        }))
+        })),
       );
-    }, 1000), // 300ms debounce delay
-    []
+    }, 300), // 300ms debounce delay
+    [],
   );
 
-  const onSelectCity = (value: string, option: CityOption, isOrigin: boolean) => {
+  const onSelectCity = (
+    value: string,
+    option: CityOption,
+    isOrigin: boolean,
+  ) => {
     const city: City = {
       label: value,
       lat: option.lat,
@@ -50,7 +54,6 @@ export default function MapDashboard() {
     } else {
       setDestination(city);
     }
-
   };
   const points = useMemo(() => {
     let _points = [];
@@ -59,15 +62,15 @@ export default function MapDashboard() {
     }
     if (destination) {
       _points.push({ lat: destination.lat, lng: destination.lng });
-    };
-    return _points
+    }
+    return _points;
   }, [origin, destination]);
   const onSearch = (query: string) => {
     fetchCitySuggestions(query);
   };
   return (
     <>
-      <div style={{padding: 5}}>
+      <div style={{ padding: 5 }}>
         <AutoComplete
           style={{ width: 200, marginRight: 10 }}
           placeholder="Select Origin"
@@ -90,5 +93,5 @@ export default function MapDashboard() {
 
       <HereMap apiKey={apiKey} points={points} />
     </>
-  )
+  );
 }

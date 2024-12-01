@@ -1,6 +1,5 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import { DatePicker } from 'antd';
 import Dashboard from './components/Dashboard';
 import { fetchGreeting } from './api';
 import MapDashboard from './components/MapDashboard';
@@ -34,16 +33,26 @@ const App: React.FC = () => {
               <h2>{greeting ? `Backend says: ${greeting}` : 'Loading...'}</h2>
               <HPlatform
                 options={{
-                  apiKey: "TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew",
+                  apiKey: 'TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew',
                   includePlaces: false,
                   includeUI: false,
                   interactive: true,
-                  version: 'v3/3.1'
+                  version: 'v3/3.1',
                 }}
               >
                 <MapDashboard />
               </HPlatform>
-              {/* <DatePicker /> */}
+              <HPlatform
+                options={{
+                  apiKey: 'TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew',
+                  includePlaces: false,
+                  includeUI: false,
+                  interactive: true,
+                  version: 'v3/3.1',
+                }}
+              >
+                <MapDashboard />
+              </HPlatform>
             </div>
           }
         />
