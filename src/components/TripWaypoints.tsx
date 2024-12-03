@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Collapse, List, AutoComplete } from 'antd';
+import { Collapse, List, AutoComplete, Button } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
 import { debounce } from 'lodash';
+import { useMap } from '../context/MapContext';
 
 const { Panel } = Collapse;
 
@@ -12,10 +13,52 @@ interface CityOption {
   lng: number;
 }
 
+const calculateDistance = async (waypoints: { lat: number; lng: number }[]) => {
+  if (waypoints.length < 2) return null;
+
+  const origin = `${waypoints[0].lat},${waypoints[0].lng}`;
+  const destination = `${waypoints[waypoints.length - 1].lat},${
+    waypoints[waypoints.length - 1].lng
+  }`;
+  const via = waypoints
+    .slice(1, -1)
+    .map((point) => `&via=${point.lat},${point.lng}`)
+    .join('');
+
+  const url =
+    `https://router.hereapi.com/v8/routes?` +
+    `transportMode=truck` +
+    `&origin=${origin}` +
+    `&destination=${destination}` +
+    via +
+    `&return=summary` +
+    `&truck[grossWeight]=8000` +
+    `&truck[length]=26` +
+    `&truck[width]=9` +
+    `&truck[height]=12` +
+    `&apikey=TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    // Convert meters to miles
+    const distanceInMiles = (
+      data.routes[0].sections[0].summary.length / 1609.344
+    ).toFixed(2);
+    console.log(`Total distance: ${distanceInMiles} miles`);
+    return distanceInMiles;
+  } catch (error) {
+    console.error('Error calculating distance:', error);
+    return null;
+  }
+};
+
 const TripWaypoints: React.FC<{
+  driverId: string;
   waypoints: { lat: number; lng: number }[];
   onPointsChange: (points: { lat: number; lng: number }[]) => void;
-}> = ({ waypoints = [], onPointsChange }) => {
+}> = ({ driverId, waypoints = [], onPointsChange }) => {
+  const { showMap } = useMap();
   const [options, setOptions] = useState<CityOption[]>([]);
   const [inputValue, setInputValue] = useState<string>('');
   const apiKey = 'TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew';
@@ -84,6 +127,11 @@ const TripWaypoints: React.FC<{
     setInputValue(value);
   };
 
+  const handleRunRoute = async () => {
+    await calculateDistance(waypoints);
+    showMap(waypoints);
+  };
+
   return (
     <Collapse defaultActiveKey={['1']}>
       <Panel header={`Trip Waypoints (${waypoints.length})`} key="1">
@@ -118,6 +166,14 @@ const TripWaypoints: React.FC<{
             )}
           />
         </div>
+        <Button
+          type="primary"
+          onClick={handleRunRoute}
+          disabled={waypoints.length < 2}
+          style={{ marginTop: '10px' }}
+        >
+          Run Route
+        </Button>
       </Panel>
     </Collapse>
   );

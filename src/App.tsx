@@ -4,6 +4,8 @@ import Dashboard from './components/Dashboard';
 import { fetchGreeting } from './api';
 import MapDashboard from './components/MapDashboard';
 import { HPlatform } from 'react-here-map';
+import { MapProvider } from './context/MapContext';
+import LoadsContainer from './components/LoadsContainer';
 
 const App: React.FC = () => {
   const [greeting, setGreeting] = React.useState<string | null>(null);
@@ -22,42 +24,23 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route
-          path="/"
-          element={
-            <div style={{ textAlign: 'center', marginTop: '50px' }}>
-              <h1>React Frontend with Fastify Backend</h1>
-              <h2>{greeting ? `Backend says: ${greeting}` : 'Loading...'}</h2>
-              <HPlatform
-                options={{
-                  apiKey: 'TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew',
-                  includePlaces: false,
-                  includeUI: false,
-                  interactive: true,
-                  version: 'v3/3.1',
-                }}
-              >
-                <MapDashboard />
-              </HPlatform>
-              <HPlatform
-                options={{
-                  apiKey: 'TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew',
-                  includePlaces: false,
-                  includeUI: false,
-                  interactive: true,
-                  version: 'v3/3.1',
-                }}
-              >
-                <MapDashboard />
-              </HPlatform>
-            </div>
-          }
-        />
-      </Routes>
-    </Router>
+    <MapProvider>
+      <Router>
+        <Routes>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route
+            path="/"
+            element={
+              <div style={{ textAlign: 'center', marginTop: '50px' }}>
+                <h1>React Frontend with Fastify Backend</h1>
+                <h2>{greeting ? `Backend says: ${greeting}` : 'Loading...'}</h2>
+              </div>
+            }
+          />
+          <Route path="/test" element={<LoadsContainer />} />
+        </Routes>
+      </Router>
+    </MapProvider>
   );
 };
 
