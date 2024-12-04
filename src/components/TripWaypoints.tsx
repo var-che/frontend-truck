@@ -123,10 +123,6 @@ const TripWaypoints: React.FC<{
     onPointsChange(newWaypoints);
   };
 
-  const handleInputChange = (value: string) => {
-    setInputValue(value);
-  };
-
   const handleRunRoute = async () => {
     await calculateDistance(waypoints);
     showMap(waypoints);

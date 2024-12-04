@@ -51,16 +51,6 @@ const CanvasDashboard: React.FC = () => {
     localStorage.setItem('canvas-elements', JSON.stringify(updatedElements));
   };
 
-  const handleClick = (id: string) => {
-    const newMaxZIndex = maxZIndex + 1;
-    const updatedElements = elements.map((el) =>
-      el.id === id ? { ...el, zIndex: newMaxZIndex } : el,
-    );
-    setElements(updatedElements);
-    setMaxZIndex(newMaxZIndex);
-    localStorage.setItem('canvas-elements', JSON.stringify(updatedElements));
-  };
-
   const handleDriverNameChange = (id: string, value: string) => {
     const updatedElements = elements.map((el) =>
       el.id === id ? { ...el, driverName: value } : el,

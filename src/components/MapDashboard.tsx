@@ -1,6 +1,6 @@
 import { AutoComplete } from 'antd';
 import { debounce } from 'lodash';
-import { useCallback, useContext, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import HereMap from './HereMap';
 interface CityOption {
   value: string; // City name
@@ -18,7 +18,7 @@ export default function MapDashboard() {
   const [origin, setOrigin] = useState<City | null>(null);
   const [destination, setDestination] = useState<City | null>(null);
   const [options, setOptions] = useState<CityOption[]>([]);
-  // const [map, setMap] = useState<H.Map | null>(null);
+
   const fetchCitySuggestions = useCallback(
     debounce(async (query: string) => {
       if (!query) return;
