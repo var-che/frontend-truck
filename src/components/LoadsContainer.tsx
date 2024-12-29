@@ -3,11 +3,26 @@ import { Table, Tabs, Button } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { mockLoads } from '../mocks/loadData';
 import dayjs from 'dayjs';
+import isBetween from 'dayjs/plugin/isBetween';
 import AddNewSearch from './AddNewSearch';
+
+dayjs.extend(isBetween);
 
 const { TabPane } = Tabs;
 
-const LoadsContainer: React.FC = () => {
+interface LoadsContainerProps {
+  driverId: string;
+  originStates?: string[];
+  destinationStates?: string[];
+  dateRange?: [dayjs.Dayjs | null, dayjs.Dayjs | null];
+}
+
+const LoadsContainer: React.FC<LoadsContainerProps> = ({
+  driverId,
+  originStates,
+  destinationStates,
+  dateRange,
+}) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Table columns definition
@@ -59,18 +74,34 @@ const LoadsContainer: React.FC = () => {
     },
   ];
 
+  const filterLoadsByDriver = (loads: typeof mockLoads) => {
+    return loads.filter((load) => {
+      const matchesOrigin =
+        !originStates?.length || originStates.includes(load.origin.state);
+      const matchesDestination =
+        !destinationStates?.length ||
+        destinationStates.includes(load.destination.state);
+      const withinDateRange =
+        !dateRange?.[0] ||
+        !dateRange?.[1] ||
+        dayjs(load.postedAt).isBetween(dateRange[0], dateRange[1], 'day', '[]');
+
+      return matchesOrigin && matchesDestination && withinDateRange;
+    });
+  };
+
   // Filter functions for different time periods
   const filterTodayLoads = () => {
     const today = dayjs().startOf('day');
-    return mockLoads.filter((load) =>
-      dayjs(load.postedAt).isSame(today, 'day'),
+    return filterLoadsByDriver(
+      mockLoads.filter((load) => dayjs(load.postedAt).isSame(today, 'day')),
     );
   };
 
   const filterTomorrowLoads = () => {
     const tomorrow = dayjs().add(1, 'day').startOf('day');
-    return mockLoads.filter((load) =>
-      dayjs(load.postedAt).isSame(tomorrow, 'day'),
+    return filterLoadsByDriver(
+      mockLoads.filter((load) => dayjs(load.postedAt).isSame(tomorrow, 'day')),
     );
   };
 
