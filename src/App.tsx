@@ -7,6 +7,7 @@ import LoadContainerListing from './components/LoadContainerListing';
 
 import { App as AntApp, Layout, Button } from 'antd';
 import LanesContainerList from './components/LanesContainerList';
+import CitySearch from './components/CitySearch';
 
 const { Header, Content } = Layout;
 
