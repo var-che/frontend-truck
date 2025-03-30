@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, Space, Typography, Row, Col, DatePicker } from 'antd';
+import { Modal, Space, Typography, Row, Col, DatePicker, Button } from 'antd';
 import dayjs from 'dayjs';
 import { USAMap, StateAbbreviations } from '@mirawision/usa-map-react';
 import CitySearch from './CitySearch';
@@ -52,6 +52,9 @@ const AddNewSearch: React.FC<AddNewSearchProps> = ({ isOpen, onClose }) => {
     destinationStates: [],
   });
 
+  const [isPosting, setIsPosting] = useState(false);
+  const [postSuccess, setPostSuccess] = useState(false);
+
   const handleOriginCitySelect = (city: SelectedCity) => {
     const [cityName, stateCode] = city.name.split(', ');
     setSearchState((prev) => ({
@@ -88,6 +91,17 @@ const AddNewSearch: React.FC<AddNewSearchProps> = ({ isOpen, onClose }) => {
             : undefined,
       },
     }));
+  };
+
+  const handlePostToDat = () => {
+    setIsPosting(true);
+    setPostSuccess(false);
+
+    // Simulate API call
+    setTimeout(() => {
+      setIsPosting(false);
+      setPostSuccess(true);
+    }, 2000);
   };
 
   const originMapSettings = useMemo<MapSettings>(() => {
@@ -138,7 +152,23 @@ const AddNewSearch: React.FC<AddNewSearchProps> = ({ isOpen, onClose }) => {
       open={isOpen}
       onCancel={onClose}
       width={1200}
-      footer={null}
+      footer={
+        <div style={{ textAlign: 'center' }}>
+          <Button
+            type="primary"
+            loading={isPosting}
+            onClick={handlePostToDat}
+            style={{ marginRight: 8 }}
+          >
+            Post on DAT
+          </Button>
+          {postSuccess && (
+            <div style={{ marginTop: 8, color: '#52c41a' }}>
+              A post has been made on DAT
+            </div>
+          )}
+        </div>
+      }
     >
       <Row gutter={24}>
         <Col span={12}>
