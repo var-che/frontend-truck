@@ -57,6 +57,7 @@
     ]
   },
   "devDependencies": {
+    "@types/chrome": "^0.0.313",
     "@types/react-beautiful-dnd": "^13.1.8"
   }
 }

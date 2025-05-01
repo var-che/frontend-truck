@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Select, Space, Tag } from 'antd';
+import DatLinesButton from './DatLinesButton';
+import ConnectionStatus from './ExtensionConnectionStatus';
+import { sendMessageToExtension } from '../utils/extensionUtils';
 
 import dayjs from 'dayjs';
+import { DatSearchResponse } from '../types/dat';
 
 interface Driver {
   id: string;
@@ -22,6 +26,7 @@ interface Lane {
   weight: number;
   details?: string; // Optional details for expansion
   driverIds: string[]; // Array of associated driver IDs
+  source?: string; // Optional source field
 }
 
 const mockLanes: Lane[] = [
@@ -30,7 +35,7 @@ const mockLanes: Lane[] = [
     origin: { city: 'Chicago', state: 'IL' },
     destination: { city: 'Dallas', state: 'TX' },
     dateRange: ['2024-12-27', '2024-12-28'],
-    weight: 10000,
+    weight: 100000,
     details: 'Regular route, no special requirements. Box truck needed.',
     driverIds: [],
   },
@@ -52,6 +57,56 @@ const mockLanes: Lane[] = [
     driverIds: [],
   },
 ];
+
+const DatSourceTag: React.FC<{ laneId: string }> = ({ laneId }) => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const response = await sendMessageToExtension({
+        type: `REFRESH_DAT_${laneId}`,
+      });
+
+      if (response.success) {
+        // Trigger animation
+        setIsRefreshing(true);
+        setTimeout(() => setIsRefreshing(false), 2000);
+      }
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    }
+  }, [laneId]);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <span
+        style={{
+          backgroundColor: isRefreshing ? '#52c41a' : '#1890ff',
+          color: 'white',
+          padding: '2px 8px',
+          borderRadius: '4px',
+          transition: 'background-color 2s ease',
+        }}
+      >
+        DAT
+      </span>
+      <button
+        onClick={handleRefresh}
+        style={{
+          border: 'none',
+          background: 'none',
+          cursor: 'pointer',
+          padding: '4px',
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+        </svg>
+      </button>
+    </div>
+  );
+};
 
 const LanesContainerList: React.FC = () => {
   // Initialize state from localStorage or fallback to mockLanes
@@ -102,6 +157,68 @@ const LanesContainerList: React.FC = () => {
     localStorage.setItem('lanes', JSON.stringify(updatedLanes));
   };
 
+  const handleDatLinesReceived = (rawData: string) => {
+    try {
+      const parsedData: DatSearchResponse[] = JSON.parse(rawData);
+
+      const newLanes = parsedData
+        .map((searchCriteria): Lane | null => {
+          const { formParams } = searchCriteria;
+          if (!formParams) return null;
+
+          return {
+            id: searchCriteria.searchId,
+            origin: {
+              city:
+                formParams.origin?.city ||
+                formParams.origin?.name?.split(',')[0] ||
+                '',
+              state:
+                formParams.origin?.state ||
+                formParams.origin?.name?.split(',')[1]?.trim() ||
+                '',
+            },
+            destination: {
+              city:
+                formParams.destination?.city ||
+                formParams.destination?.name?.split(',')[0] ||
+                '',
+              state:
+                formParams.destination?.state ||
+                formParams.destination?.name?.split(',')[1]?.trim() ||
+                '',
+            },
+            dateRange: [
+              new Date(formParams.startDate).toISOString().split('T')[0],
+              new Date(formParams.endDate).toISOString().split('T')[0],
+            ],
+            weight: formParams.weightPounds,
+            driverIds: [],
+            source: 'DAT',
+          };
+        })
+        .filter((lane): lane is Lane => lane !== null);
+
+      setLanes((prevLanes) => {
+        // Create map of existing lanes by ID
+        const existingLanesMap = new Map(
+          prevLanes.map((lane) => [lane.id, lane]),
+        );
+
+        // Add or update lanes
+        newLanes.forEach((lane) => {
+          existingLanesMap.set(lane.id, lane);
+        });
+
+        const updatedLanes = Array.from(existingLanesMap.values());
+        localStorage.setItem('lanes', JSON.stringify(updatedLanes));
+        return updatedLanes;
+      });
+    } catch (error) {
+      console.error('Error processing DAT data:', error);
+    }
+  };
+
   const columns = [
     {
       title: 'Route',
@@ -124,6 +241,13 @@ const LanesContainerList: React.FC = () => {
       key: 'weight',
       render: (record: Lane) => `${record.weight.toLocaleString()}lbs`,
       width: '30%',
+    },
+    {
+      title: 'Source',
+      key: 'source',
+      render: (record: Lane) =>
+        record.source === 'DAT' ? <DatSourceTag laneId={record.id} /> : null,
+      width: '15%',
     },
   ];
 
@@ -173,17 +297,21 @@ const LanesContainerList: React.FC = () => {
   };
 
   return (
-    <Table
-      dataSource={lanes}
-      columns={columns}
-      rowKey="id"
-      size="small"
-      pagination={false}
-      expandable={{
-        expandedRowRender: (record) => <ExpandedRow record={record} />,
-        expandRowByClick: true,
-      }}
-    />
+    <div>
+      <ConnectionStatus />
+      <DatLinesButton onDataReceived={handleDatLinesReceived} />
+      <Table
+        dataSource={lanes}
+        columns={columns}
+        rowKey="id"
+        size="small"
+        pagination={false}
+        expandable={{
+          expandedRowRender: (record) => <ExpandedRow record={record} />,
+          expandRowByClick: true,
+        }}
+      />
+    </div>
   );
 };
 

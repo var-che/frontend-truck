@@ -4,10 +4,10 @@ import Dashboard from './components/Dashboard';
 import { fetchGreeting } from './api';
 import { MapProvider } from './context/MapContext';
 import LoadContainerListing from './components/LoadContainerListing';
+import { initializeExtensionConnection } from './utils/extensionUtils';
 
 import { App as AntApp, Layout, Button } from 'antd';
 import LanesContainerList from './components/LanesContainerList';
-import CitySearch from './components/CitySearch';
 
 const { Header, Content } = Layout;
 
@@ -25,6 +25,12 @@ const App: React.FC = () => {
     };
 
     getGreeting();
+  }, []);
+
+  React.useEffect(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+      initializeExtensionConnection();
+    });
   }, []);
 
   return (
