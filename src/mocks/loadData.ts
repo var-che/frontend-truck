@@ -88,46 +88,4 @@ export const mockLoads: BoxTruckLoad[] = [
     comment: 'Same day delivery needed. Food products.',
     rate: 450,
   },
-  {
-    id: '4',
-    postedAt: '2024-03-12T10:45:00Z',
-    origin: {
-      city: 'Phoenix',
-      state: 'AZ',
-      zipCode: '85034',
-    },
-    destination: {
-      city: 'Las Vegas',
-      state: 'NV',
-      zipCode: '89119',
-    },
-    contact: {
-      name: 'David Chen',
-      phone: '602-555-0144',
-      company: 'Southwest Carriers',
-    },
-    comment: 'Electronics. Handle with care. Team preferred.',
-    rate: 700,
-  },
-  {
-    id: '5',
-    postedAt: '2024-03-12T11:30:00Z',
-    origin: {
-      city: 'Seattle',
-      state: 'WA',
-      zipCode: '98134',
-    },
-    destination: {
-      city: 'Portland',
-      state: 'OR',
-      zipCode: '97201',
-    },
-    contact: {
-      name: 'Lisa Anderson',
-      email: 'dispatch@pacificlogistics.net',
-      company: 'Pacific Logistics',
-    },
-    comment: 'Retail merchandise. Loading dock available. 2hr unload.',
-    rate: 550,
-  },
 ];

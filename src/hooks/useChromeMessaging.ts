@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const EXTENSION_ID = 'pgdncppejlbjbpbifphhmjiebjdpgehi';
 
@@ -8,6 +8,7 @@ export const useChromeMessaging = () => {
   const [datTabId, setDatTabId] = useState<number | null>(null);
   const [pongMessage, setPongMessage] = useState('');
   const [checkingConnection, setCheckingConnection] = useState(false);
+  const [lastSearchTime, setLastSearchTime] = useState<number>(0);
 
   // Helper to send messages to extension using externally_connectable API
   const sendMessageToExtension = (message: any): Promise<any> => {
@@ -86,7 +87,7 @@ export const useChromeMessaging = () => {
   };
 
   // Check if extension is available
-  const checkExtensionAvailability = async () => {
+  const checkExtensionAvailability = useCallback(async () => {
     setCheckingConnection(true);
     try {
       // First try postMessage to check if extension is injected
@@ -125,46 +126,74 @@ export const useChromeMessaging = () => {
     } finally {
       setCheckingConnection(false);
     }
-  };
+  }, []);
 
-  // Set up message listener for events from extension
+  // Set up message listener (only once)
   useEffect(() => {
-    const handleExtensionMessage = (event: MessageEvent) => {
-      // Only accept messages from our window (extension will post to window)
-      if (event.source !== window) return;
+    if (typeof window === 'undefined' || !window.chrome?.runtime?.onMessage) {
+      setExtensionConnected(false);
+      return;
+    }
 
-      // Check if this is from our extension
-      const message = event.data;
-      if (!message || message.source !== 'truckarooskie-extension') return;
-
-      console.log('Received message from extension:', message);
-
-      // Handle connection status updates
-      if (message.type === 'DAT_TAB_CONNECTED') {
-        setDatTabConnected(true);
-        setDatTabId(message.tabId);
-      } else if (message.type === 'DAT_TAB_DISCONNECTED') {
-        setDatTabConnected(false);
-        setDatTabId(null);
-      } else if (message.type === 'EXTENSION_DETECTED') {
+    const messageListener = (message: any, sender: any, sendResponse: any) => {
+      if (message.type === 'DAT_CONNECTION_STATUS') {
+        setDatTabConnected(message.connected);
+        setDatTabId(message.tabId || null);
+        setExtensionConnected(true);
+      } else if (message.type === 'PONG') {
+        setPongMessage(message.data || 'Extension connected');
         setExtensionConnected(true);
       }
     };
 
-    // Add listener for extension messages
-    window.addEventListener('message', handleExtensionMessage);
-
-    // Check connection on mount
-    checkExtensionAvailability();
-
-    // Set up periodic connection check
-    const intervalId = setInterval(checkExtensionAvailability, 30000);
+    window.chrome.runtime.onMessage.addListener(messageListener);
 
     return () => {
-      window.removeEventListener('message', handleExtensionMessage);
-      clearInterval(intervalId);
+      if (window.chrome?.runtime?.onMessage) {
+        window.chrome.runtime.onMessage.removeListener(messageListener);
+      }
     };
-  }, []);
+  }, []); // Initial connection check (only once)
+  useEffect(() => {
+    checkExtensionAvailability();
+  }, [checkExtensionAvailability]);
+
+  // Set up dynamic connection monitoring based on search activity
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    const getCheckInterval = () => {
+      const timeSinceLastSearch = Date.now() - lastSearchTime;
+      if (timeSinceLastSearch < 60000) {
+        // Within 1 minute of last search
+        return 10000; // Check every 10 seconds
+      } else if (timeSinceLastSearch < 300000) {
+        // Within 5 minutes
+        return 30000; // Check every 30 seconds
+      } else {
+        return 60000; // Check every minute when idle
+      }
+    };
+
+    const scheduleNextCheck = () => {
+      const interval = getCheckInterval();
+      timeoutId = setTimeout(() => {
+        checkExtensionAvailability();
+        scheduleNextCheck();
+      }, interval);
+    };
+
+    // Only start scheduling if we've had at least one search
+    if (lastSearchTime > 0) {
+      scheduleNextCheck();
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [lastSearchTime, checkExtensionAvailability]);
 
   // Send a ping to the DAT tab
   const pingDatTab = async () => {
@@ -187,13 +216,63 @@ export const useChromeMessaging = () => {
     }
   };
 
+  // Send DAT search data to the extension
+  const sendDatSearchData = async (searchData: any) => {
+    try {
+      console.log('Sending DAT search data to extension:', searchData);
+
+      // Update last search time for connection monitoring
+      setLastSearchTime(Date.now());
+
+      const response = await sendMessageToExtension({
+        type: 'DAT_SEARCH',
+        data: searchData,
+        timestamp: Date.now(),
+      });
+
+      console.log('DAT search response:', response);
+
+      // If the search failed due to connection issues, trigger a connection check
+      if (
+        !response.success &&
+        response.error &&
+        (response.error.includes('connection lost') ||
+          response.error.includes('Connection error') ||
+          response.error.includes('receiving end does not exist'))
+      ) {
+        console.log(
+          'Connection issue detected, rechecking extension availability...',
+        );
+        setTimeout(() => {
+          checkExtensionAvailability();
+        }, 1000);
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Failed to send DAT search data:', error);
+
+      // If there's a communication error, try to reconnect
+      console.log(
+        'Communication error detected, rechecking extension availability...',
+      );
+      setTimeout(() => {
+        checkExtensionAvailability();
+      }, 1000);
+
+      throw error;
+    }
+  };
+
   return {
     extensionConnected,
     datTabConnected,
     datTabId,
     pongMessage,
     pingDatTab,
+    sendDatSearchData,
     checkExtensionAvailability,
     checkingConnection,
+    sendMessageToExtension, // Expose for direct usage if needed
   };
 };

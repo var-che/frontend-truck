@@ -10,10 +10,7 @@ export const ConnectionStatus = () => {
     pingDatTab,
   } = useChromeMessaging();
 
-  useEffect(() => {
-    console.log('Extension connected:', extensionConnected);
-    console.log('DAT tab connected:', datTabConnected);
-  }, [extensionConnected, datTabConnected]);
+  useEffect(() => {}, [extensionConnected, datTabConnected]);
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial' }}>
