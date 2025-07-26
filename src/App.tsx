@@ -1,18 +1,25 @@
-import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import React, { useState } from 'react';
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  useNavigate,
+} from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import { fetchGreeting } from './api';
 import { MapProvider } from './context/MapContext';
 import LoadContainerListing from './components/LoadContainerListing';
-import { initializeExtensionConnection } from './utils/extensionUtils';
 
 import { App as AntApp, Layout, Button } from 'antd';
 import LanesContainerList from './components/LanesContainerList';
+import BoardsInitialization from './components/boards/BoardsInitialization';
+import DatConnectionStatus from './components/DatConnectionStatus';
 
 const { Header, Content } = Layout;
 
 const App: React.FC = () => {
   const [greeting, setGreeting] = React.useState<string | null>(null);
+  const [datConnected, setDatConnected] = useState(false);
 
   React.useEffect(() => {
     const getGreeting = async () => {
@@ -27,35 +34,19 @@ const App: React.FC = () => {
     getGreeting();
   }, []);
 
-  React.useEffect(() => {
-    document.addEventListener('DOMContentLoaded', () => {
-      initializeExtensionConnection();
-    });
-  }, []);
-
   return (
     <AntApp>
       <MapProvider>
         <Router>
           <Layout>
-            <Header
-              style={{
-                position: 'fixed',
-                width: '100%',
-                zIndex: 1000,
-                backgroundColor: '#fff',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: '16px',
-              }}
-            >
-              <Button type="primary">Dashboard</Button>
-              <Button>Loads</Button>
-              <Button>Settings</Button>
-            </Header>
+            <AppHeader />
             <Content style={{ marginTop: 64, padding: '0 50px' }}>
+              <div
+                className="connection-status-wrapper"
+                style={{ margin: '16px' }}
+              >
+                <DatConnectionStatus onConnectionChange={setDatConnected} />
+              </div>
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route
@@ -71,12 +62,41 @@ const App: React.FC = () => {
                 />
                 <Route path="/lanes" element={<LanesContainerList />} />
                 <Route path="/test" element={<LoadContainerListing />} />
+                <Route path="/boards" element={<BoardsInitialization />} />
               </Routes>
             </Content>
           </Layout>
         </Router>
       </MapProvider>
     </AntApp>
+  );
+};
+
+// Create a separate component for the header to use navigation hooks
+const AppHeader: React.FC = () => {
+  const navigate = useNavigate();
+
+  return (
+    <Header
+      style={{
+        position: 'fixed',
+        width: '100%',
+        zIndex: 1000,
+        backgroundColor: '#fff',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '16px',
+      }}
+    >
+      <Button type="primary" onClick={() => navigate('/dashboard')}>
+        Dashboard
+      </Button>
+      <Button onClick={() => navigate('/test')}>Loads</Button>
+      <Button>Settings</Button>
+      <Button onClick={() => navigate('/boards')}>Boards connection</Button>
+    </Header>
   );
 };
 

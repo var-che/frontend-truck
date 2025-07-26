@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Select, Space, Tag } from 'antd';
-import DatLinesButton from './DatLinesButton';
-import ConnectionStatus from './ExtensionConnectionStatus';
-import { sendMessageToExtension } from '../utils/extensionUtils';
 
 import dayjs from 'dayjs';
 import { DatSearchResponse } from '../types/dat';
@@ -63,19 +60,7 @@ const DatSourceTag: React.FC<{ laneId: string }> = ({ laneId }) => {
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    try {
-      const response = await sendMessageToExtension({
-        type: `REFRESH_DAT_${laneId}`,
-      });
-
-      if (response.success) {
-        // Trigger animation
-        setIsRefreshing(true);
-        setTimeout(() => setIsRefreshing(false), 2000);
-      }
-    } catch (error) {
-      console.error('Refresh failed:', error);
-    }
+    console.log('nothing yet');
   }, [laneId]);
 
   return (
@@ -298,8 +283,6 @@ const LanesContainerList: React.FC = () => {
 
   return (
     <div>
-      <ConnectionStatus />
-      <DatLinesButton onDataReceived={handleDatLinesReceived} />
       <Table
         dataSource={lanes}
         columns={columns}

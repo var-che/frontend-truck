@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Modal, Space, Typography, Row, Col, DatePicker, Button } from 'antd';
 import dayjs from 'dayjs';
 import { USAMap, StateAbbreviations } from '@mirawision/usa-map-react';
@@ -54,6 +54,8 @@ const AddNewSearch: React.FC<AddNewSearchProps> = ({ isOpen, onClose }) => {
 
   const [isPosting, setIsPosting] = useState(false);
   const [postSuccess, setPostSuccess] = useState(false);
+  const [extensionConnected, setExtensionConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const handleOriginCitySelect = (city: SelectedCity) => {
     const [cityName, stateCode] = city.name.split(', ');
@@ -93,18 +95,30 @@ const AddNewSearch: React.FC<AddNewSearchProps> = ({ isOpen, onClose }) => {
     }));
   };
 
-  const handlePostToDat = () => {
+  const handlePostToDat = async () => {
     setIsPosting(true);
     setPostSuccess(false);
+    setConnectionError(null);
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsPosting(false);
-      setPostSuccess(true);
-    }, 2000);
+    // Simple search data object
+    const searchData = {
+      origin: searchState.origin
+        ? `${searchState.origin.city}, ${searchState.origin.state}`
+        : null,
+      destination: searchState.destination
+        ? `${searchState.destination.city}, ${searchState.destination.state}`
+        : null,
+      startDate: searchState.dateRange[0]
+        ? searchState.dateRange[0].format('YYYY-MM-DD')
+        : null,
+      endDate: searchState.dateRange[1]
+        ? searchState.dateRange[1].format('YYYY-MM-DD')
+        : null,
+    };
+    console.log('Search data, searchData', searchData);
   };
 
-  const originMapSettings = useMemo<MapSettings>(() => {
+  const originMapSettings = React.useMemo<MapSettings>(() => {
     const settings: MapSettings = {};
     StateAbbreviations.forEach((state) => {
       settings[state] = {
@@ -124,7 +138,7 @@ const AddNewSearch: React.FC<AddNewSearchProps> = ({ isOpen, onClose }) => {
     return settings;
   }, [searchState.originStates]);
 
-  const destinationMapSettings = useMemo<MapSettings>(() => {
+  const destinationMapSettings = React.useMemo<MapSettings>(() => {
     const settings: MapSettings = {};
     StateAbbreviations.forEach((state) => {
       settings[state] = {
@@ -159,17 +173,44 @@ const AddNewSearch: React.FC<AddNewSearchProps> = ({ isOpen, onClose }) => {
             loading={isPosting}
             onClick={handlePostToDat}
             style={{ marginRight: 8 }}
+            disabled={!extensionConnected || !!connectionError}
           >
-            Post on DAT
+            Search on DAT
           </Button>
           {postSuccess && (
             <div style={{ marginTop: 8, color: '#52c41a' }}>
-              A post has been made on DAT
+              Search executed successfully on DAT
+            </div>
+          )}
+          {connectionError && (
+            <div style={{ marginTop: 8, color: '#ff4d4f' }}>
+              {connectionError}
             </div>
           )}
         </div>
       }
     >
+      {/* Extension connection warning */}
+      {!extensionConnected && (
+        <div
+          style={{
+            background: '#fff2e8',
+            padding: '10px',
+            marginBottom: '16px',
+            borderRadius: '4px',
+            border: '1px solid #ffbb96',
+          }}
+        >
+          <div style={{ color: '#d4380d', marginBottom: '8px' }}>
+            <strong>Extension Not Connected</strong>
+          </div>
+          <p>Please make sure the browser extension is installed and active.</p>
+          <Button size="small" style={{ marginTop: '8px' }}>
+            Check Connection
+          </Button>
+        </div>
+      )}
+
       <Row gutter={24}>
         <Col span={12}>
           <Space direction="vertical" size="large" style={{ width: '100%' }}>
