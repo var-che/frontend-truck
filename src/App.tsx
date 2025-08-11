@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   BrowserRouter as Router,
   Route,
@@ -8,7 +8,12 @@ import {
 import Dashboard from './components/Dashboard';
 import { fetchGreeting } from './api';
 import { MapProvider } from './context/MapContext';
+import { SearchResultsProvider } from './context/SearchResultsContext';
+import { TrimbleRoutingProvider } from './context/routing/TrimbleRoutingContext';
 import LoadContainerListing from './components/LoadContainerListing';
+import DriversPage from './components/DriversPage';
+import SylectusSearchPage from './components/SylectusSearchPage';
+import TrimbleRoutingPage from './components/routing/trimble/TrimbleRoutingPage';
 
 import { App as AntApp, Layout, Button } from 'antd';
 import LanesContainerList from './components/LanesContainerList';
@@ -19,7 +24,6 @@ const { Header, Content } = Layout;
 
 const App: React.FC = () => {
   const [greeting, setGreeting] = React.useState<string | null>(null);
-  const [datConnected, setDatConnected] = useState(false);
 
   React.useEffect(() => {
     const getGreeting = async () => {
@@ -37,36 +41,48 @@ const App: React.FC = () => {
   return (
     <AntApp>
       <MapProvider>
-        <Router>
-          <Layout>
-            <AppHeader />
-            <Content style={{ marginTop: 64, padding: '0 50px' }}>
-              <div
-                className="connection-status-wrapper"
-                style={{ margin: '16px' }}
-              >
-                <DatConnectionStatus onConnectionChange={setDatConnected} />
-              </div>
-              <Routes>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route
-                  path="/"
-                  element={
-                    <div style={{ textAlign: 'center', marginTop: '50px' }}>
-                      <h1>React Frontend with Fastify Backend</h1>
-                      <h2>
-                        {greeting ? `Backend says: ${greeting}` : 'Loading...'}
-                      </h2>
-                    </div>
-                  }
-                />
-                <Route path="/lanes" element={<LanesContainerList />} />
-                <Route path="/test" element={<LoadContainerListing />} />
-                <Route path="/boards" element={<BoardsInitialization />} />
-              </Routes>
-            </Content>
-          </Layout>
-        </Router>
+        <SearchResultsProvider>
+          <TrimbleRoutingProvider>
+            <Router>
+              <Layout>
+                <AppHeader />
+                <Content style={{ marginTop: 64, padding: '0 50px' }}>
+                  <div
+                    className="connection-status-wrapper"
+                    style={{ margin: '16px' }}
+                  >
+                    <DatConnectionStatus onConnectionChange={() => {}} />
+                  </div>
+                  <Routes>
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route
+                      path="/"
+                      element={
+                        <div style={{ textAlign: 'center', marginTop: '50px' }}>
+                          <h1>React Frontend with Fastify Backend</h1>
+                          <h2>
+                            {greeting
+                              ? `Backend says: ${greeting}`
+                              : 'Loading...'}
+                          </h2>
+                        </div>
+                      }
+                    />
+                    <Route path="/lanes" element={<LanesContainerList />} />
+                    <Route path="/test" element={<LoadContainerListing />} />
+                    <Route path="/boards" element={<BoardsInitialization />} />
+                    <Route path="/drivers" element={<DriversPage />} />
+                    <Route path="/sylectus" element={<SylectusSearchPage />} />
+                    <Route
+                      path="/trimble-routing"
+                      element={<TrimbleRoutingPage />}
+                    />
+                  </Routes>
+                </Content>
+              </Layout>
+            </Router>
+          </TrimbleRoutingProvider>
+        </SearchResultsProvider>
       </MapProvider>
     </AntApp>
   );
@@ -94,6 +110,11 @@ const AppHeader: React.FC = () => {
         Dashboard
       </Button>
       <Button onClick={() => navigate('/test')}>Loads</Button>
+      <Button onClick={() => navigate('/drivers')}>Drivers</Button>
+      <Button onClick={() => navigate('/sylectus')}>Sylectus</Button>
+      <Button onClick={() => navigate('/trimble-routing')}>
+        Trimble Routing
+      </Button>
       <Button>Settings</Button>
       <Button onClick={() => navigate('/boards')}>Boards connection</Button>
     </Header>

@@ -1,0 +1,122 @@
+/* Routing Page Styles */
+
+.routing-page {
+  height: 100vh;
+  background: #f0f2f5;
+  position: relative;
+  overflow: hidden;
+}
+
+.routing-element {
+  position: absolute;
+  cursor: move;
+  user-select: none;
+}
+
+.routing-element:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
+}
+
+.routing-element .ant-card-head {
+  padding: 8px 12px;
+  min-height: 40px;
+}
+
+.routing-element .ant-card-body {
+  padding: 12px;
+}
+
+.waypoint-list .ant-list-item {
+  padding: 4px 0;
+}
+
+.waypoint-list .ant-list-item-meta {
+  margin-bottom: 0;
+}
+
+.waypoint-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.waypoint-number.start {
+  background-color: #52c41a;
+}
+
+.waypoint-number.end {
+  background-color: #f5222d;
+}
+
+.waypoint-number.intermediate {
+  background-color: #1890ff;
+}
+
+.route-options .ant-form-item {
+  margin-bottom: 8px;
+}
+
+.route-options .ant-form-item-label {
+  padding-bottom: 2px;
+}
+
+.map-display {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.map-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+}
+
+.add-element-button {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #999;
+}
+
+.route-summary {
+  margin-top: 8px;
+  padding: 8px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 4px;
+}
+
+.route-summary-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.route-summary-item:last-child {
+  margin-bottom: 0;
+}

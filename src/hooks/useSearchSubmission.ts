@@ -7,9 +7,12 @@ import {
   LoadBoardSearchResult,
 } from '../types/loadboard';
 import { loadBoardRegistry } from '../services/LoadBoardRegistry';
+import { generateSearchModuleId } from '../utils';
+import { useSearchResults } from '../context/SearchResultsContext';
 
 export const useSearchSubmission = () => {
-  const { sendDatSearchData, extensionConnected } = useChromeMessaging();
+  const { sendMessageToExtension, extensionConnected } = useChromeMessaging();
+  const { addDatResult, addSylectusResult } = useSearchResults();
 
   const [submissionState, setSubmissionState] =
     useState<LoadBoardSubmissionState>({
@@ -26,10 +29,21 @@ export const useSearchSubmission = () => {
 
   // Set up messaging function when extension is connected
   useEffect(() => {
-    if (extensionConnected && sendDatSearchData) {
-      loadBoardRegistry.setMessagingFunction(sendDatSearchData);
+    console.log('🔧 useSearchSubmission: Setting up messaging function');
+    console.log('Extension connected:', extensionConnected);
+    console.log('sendMessageToExtension available:', !!sendMessageToExtension);
+
+    if (extensionConnected && sendMessageToExtension) {
+      console.log(
+        '✅ useSearchSubmission: Setting messaging function in registry',
+      );
+      loadBoardRegistry.setMessagingFunction(sendMessageToExtension);
+    } else {
+      console.log(
+        '⚠️ useSearchSubmission: Extension not connected or messaging not available',
+      );
     }
-  }, [extensionConnected, sendDatSearchData]);
+  }, [extensionConnected, sendMessageToExtension]);
 
   const searchOnLoadBoards = async (
     searchState: SearchState,
@@ -38,6 +52,10 @@ export const useSearchSubmission = () => {
       LoadBoardProvider.SYLECTUS,
     ],
   ) => {
+    // Generate a unique search module ID for this search
+    const searchModuleId = generateSearchModuleId();
+    console.log(`🆔 Generated search module ID: ${searchModuleId}`);
+
     setSubmissionState((prev) => ({
       ...prev,
       isPosting: true,
@@ -57,7 +75,12 @@ export const useSearchSubmission = () => {
       const searchPromises = services.map(async (service) => {
         try {
           const searchData = service.transformSearchState(searchState);
-          const result = await service.search(searchData);
+          // Add search module ID to the search data
+          const enrichedSearchData = {
+            ...searchData,
+            searchModuleId,
+          };
+          const result = await service.search(enrichedSearchData);
           return { provider: service.provider, result };
         } catch (error) {
           console.error(`Error searching on ${service.name}:`, error);
@@ -82,6 +105,19 @@ export const useSearchSubmission = () => {
           newResults[provider] = result;
           if (!result.success) {
             newErrors[provider] = result.message || 'Search failed';
+          } else {
+            // Add successful results to the context
+            if (provider === LoadBoardProvider.DAT) {
+              console.log(
+                '📊 useSearchSubmission: Adding DAT result to context',
+              );
+              addDatResult(result);
+            } else if (provider === LoadBoardProvider.SYLECTUS) {
+              console.log(
+                '📊 useSearchSubmission: Adding Sylectus result to context',
+              );
+              addSylectusResult(result);
+            }
           }
         });
 
@@ -108,6 +144,10 @@ export const useSearchSubmission = () => {
     searchState: SearchState,
     provider: LoadBoardProvider,
   ) => {
+    console.log(
+      `🎯 useSearchSubmission.searchOnSpecificLoadBoard called for ${provider}:`,
+      searchState,
+    );
     await searchOnLoadBoards(searchState, [provider]);
   };
 

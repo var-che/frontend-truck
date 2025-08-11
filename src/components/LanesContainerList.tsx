@@ -1,298 +1,393 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Table, Select, Space, Tag } from 'antd';
-
-import dayjs from 'dayjs';
-import { DatSearchResponse } from '../types/dat';
-
-interface Driver {
-  id: string;
-  driverName: string;
-}
-
-interface Lane {
-  id: string;
-  origin: {
-    city: string;
-    state: string;
-  };
-  destination: {
-    city: string;
-    state: string;
-  };
-  dateRange: [string, string]; // ISO date strings
-  weight: number;
-  details?: string; // Optional details for expansion
-  driverIds: string[]; // Array of associated driver IDs
-  source?: string; // Optional source field
-}
-
-const mockLanes: Lane[] = [
-  {
-    id: '1',
-    origin: { city: 'Chicago', state: 'IL' },
-    destination: { city: 'Dallas', state: 'TX' },
-    dateRange: ['2024-12-27', '2024-12-28'],
-    weight: 100000,
-    details: 'Regular route, no special requirements. Box truck needed.',
-    driverIds: [],
-  },
-  {
-    id: '2',
-    origin: { city: 'New York', state: 'NY' },
-    destination: { city: 'Miami', state: 'FL' },
-    dateRange: ['2024-12-28', '2024-12-29'],
-    weight: 8000,
-    details: 'Fragile items, temperature controlled required.',
-    driverIds: [],
-  },
-  {
-    id: '3',
-    origin: { city: 'Los Angeles', state: 'CA' },
-    destination: { city: 'Phoenix', state: 'AZ' },
-    dateRange: ['2024-12-29', '2024-12-30'],
-    weight: 12000,
-    driverIds: [],
-  },
-];
-
-const DatSourceTag: React.FC<{ laneId: string }> = ({ laneId }) => {
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    console.log('nothing yet');
-  }, [laneId]);
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-      <span
-        style={{
-          backgroundColor: isRefreshing ? '#52c41a' : '#1890ff',
-          color: 'white',
-          padding: '2px 8px',
-          borderRadius: '4px',
-          transition: 'background-color 2s ease',
-        }}
-      >
-        DAT
-      </span>
-      <button
-        onClick={handleRefresh}
-        style={{
-          border: 'none',
-          background: 'none',
-          cursor: 'pointer',
-          padding: '4px',
-        }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
-        </svg>
-      </button>
-    </div>
-  );
-};
+import React, { useState } from 'react';
+import { Card, Space, Button, message } from 'antd';
+import { ReloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { useLaneAutoAdd } from '../hooks/useLaneAutoAdd';
+import { useSearchResults } from '../context/SearchResultsContext';
+import { useChromeMessaging } from '../hooks/useChromeMessaging';
+import { Lane } from './lanes/types';
+import { LaneTable } from './lanes/LaneTable';
+import { EditLaneModal } from './lanes/EditLaneModal';
+import LoadsContainer from './LoadsContainer';
 
 const LanesContainerList: React.FC = () => {
-  // Initialize state from localStorage or fallback to mockLanes
+  // Initialize state from localStorage or fallback to empty array
   const [lanes, setLanes] = useState<Lane[]>(() => {
     const savedLanes = localStorage.getItem('lanes');
-    return savedLanes ? JSON.parse(savedLanes) : mockLanes;
+    return savedLanes ? JSON.parse(savedLanes) : [];
   });
-  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editingLane, setEditingLane] = useState<Lane | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedLane, setSelectedLane] = useState<Lane | null>(null);
 
-  // Load drivers from localStorage
-  useEffect(() => {
-    const savedElements = localStorage.getItem('canvas-elements');
-    if (savedElements) {
-      const elements = JSON.parse(savedElements);
-      const availableDrivers = elements.map((el: any) => ({
-        id: el.id,
-        driverName: el.driverName || 'Unnamed Driver',
-      }));
-      setDrivers(availableDrivers);
-    }
-  }, []);
+  // Get search submission results for auto-adding lanes
+  const {
+    latestDatResult,
+    latestSylectusResult,
+    addSylectusResult,
+    deleteResultBySearchModuleId,
+    deleteSylectusResult,
+    datResults,
+    sylectusResults,
+  } = useSearchResults();
 
-  const handleAddDriver = (laneId: string, driverId: string) => {
-    const updatedLanes = lanes.map((lane) => {
-      if (lane.id === laneId) {
-        return {
-          ...lane,
-          driverIds: [...(lane.driverIds || []), driverId],
-        };
-      }
-      return lane;
-    });
-    setLanes(updatedLanes);
-    localStorage.setItem('lanes', JSON.stringify(updatedLanes));
-  };
+  // Get Chrome messaging capabilities
+  const { sendMessageToExtension } = useChromeMessaging();
 
-  const handleRemoveDriver = (laneId: string, driverId: string) => {
-    const updatedLanes = lanes.map((lane) => {
-      if (lane.id === laneId) {
-        return {
-          ...lane,
-          driverIds: (lane.driverIds || []).filter((id) => id !== driverId),
-        };
-      }
-      return lane;
-    });
-    setLanes(updatedLanes);
-    localStorage.setItem('lanes', JSON.stringify(updatedLanes));
-  };
+  // Auto-add successful search results to lanes
+  useLaneAutoAdd({
+    setLanes,
+    datResult: latestDatResult,
+    sylectusResult: latestSylectusResult,
+  });
 
-  const handleDatLinesReceived = (rawData: string) => {
+  const handleRefresh = async () => {
+    setLoading(true);
     try {
-      const parsedData: DatSearchResponse[] = JSON.parse(rawData);
+      // TODO: Implement refresh logic
+      console.log('🔄 Refreshing lanes...');
+      // For now, just reload from localStorage
+      const savedLanes = localStorage.getItem('lanes');
+      if (savedLanes) {
+        setLanes(JSON.parse(savedLanes));
+      }
+      message.success('Lanes refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing lanes:', error);
+      message.error('Failed to refresh lanes');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      const newLanes = parsedData
-        .map((searchCriteria): Lane | null => {
-          const { formParams } = searchCriteria;
-          if (!formParams) return null;
+  const handleEditLane = (lane: Lane) => {
+    setEditingLane(lane);
+    setIsEditModalOpen(true);
+  };
 
-          return {
-            id: searchCriteria.searchId,
-            origin: {
-              city:
-                formParams.origin?.city ||
-                formParams.origin?.name?.split(',')[0] ||
-                '',
-              state:
-                formParams.origin?.state ||
-                formParams.origin?.name?.split(',')[1]?.trim() ||
-                '',
-            },
-            destination: {
-              city:
-                formParams.destination?.city ||
-                formParams.destination?.name?.split(',')[0] ||
-                '',
-              state:
-                formParams.destination?.state ||
-                formParams.destination?.name?.split(',')[1]?.trim() ||
-                '',
-            },
-            dateRange: [
-              new Date(formParams.startDate).toISOString().split('T')[0],
-              new Date(formParams.endDate).toISOString().split('T')[0],
-            ],
-            weight: formParams.weightPounds,
-            driverIds: [],
-            source: 'DAT',
-          };
-        })
-        .filter((lane): lane is Lane => lane !== null);
+  const handleSelectLane = (lane: Lane) => {
+    setSelectedLane(lane);
+  };
 
-      setLanes((prevLanes) => {
-        // Create map of existing lanes by ID
-        const existingLanesMap = new Map(
-          prevLanes.map((lane) => [lane.id, lane]),
+  const handleBackToLanes = () => {
+    setSelectedLane(null);
+  };
+
+  const handleDeleteLane = async (laneId: string) => {
+    try {
+      // Find the lane to be deleted to get its associated search result IDs
+      const laneToDelete = lanes.find((lane) => lane.id === laneId);
+
+      if (laneToDelete) {
+        console.log(
+          '🗑️ Cascade delete: Deleting lane and associated search results:',
+          laneToDelete,
         );
 
-        // Add or update lanes
-        newLanes.forEach((lane) => {
-          existingLanesMap.set(lane.id, lane);
-        });
+        // Delete associated DAT search results if they exist
+        if (laneToDelete.datQueryId) {
+          console.log(
+            '🗑️ Deleting associated DAT search results:',
+            laneToDelete.datQueryId,
+          );
+          deleteResultBySearchModuleId(laneToDelete.datQueryId);
+        }
 
-        const updatedLanes = Array.from(existingLanesMap.values());
-        localStorage.setItem('lanes', JSON.stringify(updatedLanes));
-        return updatedLanes;
-      });
+        // Delete associated Sylectus search results if they exist
+        if (laneToDelete.sylectusQueryId) {
+          console.log(
+            '🗑️ Deleting associated Sylectus search results:',
+            laneToDelete.sylectusQueryId,
+          );
+          deleteResultBySearchModuleId(laneToDelete.sylectusQueryId);
+        }
+
+        // Also delete by the lane's searchModuleId if it exists and is different
+        if (
+          laneToDelete.searchModuleId &&
+          laneToDelete.searchModuleId !== laneToDelete.datQueryId &&
+          laneToDelete.searchModuleId !== laneToDelete.sylectusQueryId
+        ) {
+          console.log(
+            '🗑️ Deleting search results by lane searchModuleId:',
+            laneToDelete.searchModuleId,
+          );
+          deleteResultBySearchModuleId(laneToDelete.searchModuleId);
+        }
+      }
+
+      // Delete the lane itself
+      const updatedLanes = lanes.filter((lane) => lane.id !== laneId);
+      setLanes(updatedLanes);
+      localStorage.setItem('lanes', JSON.stringify(updatedLanes));
+
+      message.success(
+        'Lane and associated search results deleted successfully',
+      );
     } catch (error) {
-      console.error('Error processing DAT data:', error);
+      console.error('Error deleting lane:', error);
+      message.error('Failed to delete lane');
     }
   };
 
-  const columns = [
-    {
-      title: 'Route',
-      key: 'route',
-      render: (record: Lane) =>
-        `${record.origin.city} ${record.origin.state} - ${record.destination.city} ${record.destination.state}`,
-      width: '40%',
-    },
-    {
-      title: 'Date Range',
-      key: 'dateRange',
-      render: (record: Lane) =>
-        `${dayjs(record.dateRange[0]).format('MM/DD')}-${dayjs(
-          record.dateRange[1],
-        ).format('MM/DD')}`,
-      width: '30%',
-    },
-    {
-      title: 'Weight',
-      key: 'weight',
-      render: (record: Lane) => `${record.weight.toLocaleString()}lbs`,
-      width: '30%',
-    },
-    {
-      title: 'Source',
-      key: 'source',
-      render: (record: Lane) =>
-        record.source === 'DAT' ? <DatSourceTag laneId={record.id} /> : null,
-      width: '15%',
-    },
-  ];
+  const handleSaveLane = async (updatedLane: Lane) => {
+    try {
+      const updatedLanes = lanes.map((lane) =>
+        lane.id === updatedLane.id ? updatedLane : lane,
+      );
+      setLanes(updatedLanes);
+      localStorage.setItem('lanes', JSON.stringify(updatedLanes));
+      message.success('Lane updated successfully');
+    } catch (error) {
+      console.error('Error updating lane:', error);
+      message.error('Failed to update lane');
+      throw error; // Re-throw to let the modal handle the error
+    }
+  };
 
-  const ExpandedRow: React.FC<{ record: Lane }> = ({ record }) => {
-    const availableDrivers = drivers.filter(
-      (driver) => !record.driverIds?.includes(driver.id),
-    );
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditingLane(null);
+  };
+
+  const handleRefreshSylectus = async (lane: Lane) => {
+    try {
+      console.log('🔄 Refreshing Sylectus data for lane:', lane);
+
+      // Convert lane data to Sylectus search format
+      const sylectusParams = {
+        fromCity: lane.origin.city.toLowerCase(),
+        fromState: lane.origin.state,
+        toCity: lane.destination?.city?.toLowerCase() || '',
+        toState: lane.destination?.state || '',
+        miles: 120, // Default miles radius
+        fromDate: lane.dateRange[0], // Use the lane's date range
+        loadTypes: [],
+        maxWeight: '',
+        minCargo: '',
+        maxCargo: '',
+        freight: 'Both',
+        refreshRate: 300,
+      };
+
+      // Prepare the message for the extension
+      const extensionMessage = {
+        type: 'SYLECTUS_SEARCH',
+        params: sylectusParams,
+      };
+
+      console.log('📨 Sending Sylectus refresh message:', extensionMessage);
+
+      // Send message to extension
+      const response = await sendMessageToExtension(extensionMessage);
+
+      if (response && response.success) {
+        console.log('✅ Sylectus refresh successful:', response);
+
+        // Extract loads from response
+        const loads = response.data?.loads || response.loads || [];
+
+        // Use actual loads count if totalRecords is not provided or is 0
+        const actualTotalRecords =
+          response.totalRecords > 0 ? response.totalRecords : loads.length;
+
+        // Always create a new search module ID for refreshes to ensure old results are replaced
+        const newSearchModuleId = `sylectus_refresh_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
+
+        // If the lane has an existing sylectusQueryId, we should remove those old results first
+        if (lane.sylectusQueryId) {
+          console.log(
+            '🧹 Removing old Sylectus results for lane:',
+            lane.sylectusQueryId,
+          );
+          deleteSylectusResult(lane.sylectusQueryId);
+        }
+
+        // Create a LoadBoardSearchResult from the response
+        const searchResult = {
+          success: true,
+          message: `Found ${actualTotalRecords} loads for lane refresh`,
+          data: {
+            provider: 'SYLECTUS',
+            searchModuleId: newSearchModuleId,
+            timestamp: new Date().toISOString(),
+            loads: loads,
+            totalRecords: actualTotalRecords,
+            searchData: {
+              origin: `${lane.origin.city}, ${lane.origin.state}`,
+              destination:
+                lane.destination?.city && lane.destination?.state
+                  ? `${lane.destination.city}, ${lane.destination.state}`
+                  : '',
+              searchModuleId: newSearchModuleId,
+            },
+          },
+        };
+
+        // Always add/update the search result in SearchResultsContext so loads are displayed
+        // The useLaneAutoAdd hook should be smart enough to not create duplicates
+        console.log('🔄 Updating search result for lane refresh');
+        addSylectusResult(searchResult);
+
+        // Update the lane with new data
+        const updatedLane: Lane = {
+          ...lane,
+          lastRefreshed: new Date().toISOString(),
+          resultsCount: actualTotalRecords,
+          sylectusQueryId: newSearchModuleId, // Use the search module ID
+        };
+
+        // Update lanes state
+        const updatedLanes = lanes.map((l) =>
+          l.id === lane.id ? updatedLane : l,
+        );
+        setLanes(updatedLanes);
+        localStorage.setItem('lanes', JSON.stringify(updatedLanes));
+
+        message.success(
+          `Sylectus data refreshed successfully. Found ${actualTotalRecords} loads.`,
+        );
+      } else {
+        throw new Error(response?.error || 'Failed to refresh Sylectus data');
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing Sylectus data:', error);
+      message.error(
+        'Failed to refresh Sylectus data. Make sure the extension is connected.',
+      );
+    }
+  };
+
+  // Get search results for the selected lane
+  const getSelectedLaneResults = () => {
+    if (!selectedLane) return [];
+
+    const allResults = [...datResults, ...sylectusResults];
+    return allResults.filter((result) => {
+      const searchModuleId = result.data?.searchModuleId;
+      return (
+        searchModuleId === selectedLane.datQueryId ||
+        searchModuleId === selectedLane.sylectusQueryId ||
+        searchModuleId === selectedLane.searchModuleId
+      );
+    });
+  };
+
+  // If a lane is selected, show the lane loads view
+  if (selectedLane) {
+    const laneResults = getSelectedLaneResults();
 
     return (
-      <div style={{ padding: '20px', backgroundColor: '#fafafa' }}>
-        <div>{record.details}</div>
-        <div style={{ marginTop: '16px' }}>
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <div>
-              <strong>Associated Drivers:</strong>
-              <div style={{ marginTop: '8px' }}>
-                {record.driverIds?.map((driverId) => {
-                  const driver = drivers.find((d) => d.id === driverId);
-                  return (
-                    <Tag
-                      key={driverId}
-                      closable
-                      onClose={() => handleRemoveDriver(record.id, driverId)}
-                      style={{ marginBottom: '8px' }}
-                    >
-                      {driver?.driverName || 'Unknown Driver'}
-                    </Tag>
-                  );
-                })}
-              </div>
-            </div>
+      <div>
+        <Card
+          title={
             <Space>
-              <Select
-                style={{ width: 200 }}
-                placeholder="Select driver"
-                options={availableDrivers.map((driver) => ({
-                  value: driver.id,
-                  label: driver.driverName,
-                }))}
-                onChange={(value) => handleAddDriver(record.id, value)}
-              />
+              <Button
+                icon={<ArrowLeftOutlined />}
+                onClick={handleBackToLanes}
+                type="text"
+              >
+                Back to Lanes
+              </Button>
+              <span>
+                Loads for: {selectedLane.origin.city},{' '}
+                {selectedLane.origin.state}
+                {selectedLane.destination?.city &&
+                  selectedLane.destination?.state &&
+                  ` → ${selectedLane.destination.city}, ${selectedLane.destination.state}`}
+              </span>
             </Space>
-          </Space>
-        </div>
+          }
+          extra={
+            <Space>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => handleRefreshSylectus(selectedLane)}
+                loading={loading}
+              >
+                Refresh Sylectus
+              </Button>
+            </Space>
+          }
+        >
+          {laneResults.length > 0 ? (
+            <div>
+              {laneResults.map((searchResult, index) => {
+                const searchModuleId = searchResult.data?.searchModuleId;
+                const provider = searchResult.data?.provider || 'Unknown';
+                const loadCount =
+                  searchResult.data?.loads?.length ||
+                  searchResult.data?.rawResponse?.data?.createAssetAndGetMatches
+                    ?.assetMatchesBody?.matches?.length ||
+                  0;
+
+                if (!searchModuleId) return null;
+
+                return (
+                  <div key={searchModuleId} style={{ marginBottom: '24px' }}>
+                    <LoadsContainer
+                      searchModuleId={searchModuleId}
+                      searchResult={searchResult}
+                      title={`${provider} Results (${loadCount} loads)`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: '40px 20px',
+                textAlign: 'center',
+                color: '#666',
+                backgroundColor: '#fafafa',
+                borderRadius: '8px',
+              }}
+            >
+              <h3>No loads found for this lane</h3>
+              <p>
+                Click "Refresh Sylectus" to search for loads on this lane, or go
+                back to lanes to select a different one.
+              </p>
+            </div>
+          )}
+        </Card>
       </div>
     );
-  };
+  }
 
   return (
     <div>
-      <Table
-        dataSource={lanes}
-        columns={columns}
-        rowKey="id"
-        size="small"
-        pagination={false}
-        expandable={{
-          expandedRowRender: (record) => <ExpandedRow record={record} />,
-          expandRowByClick: true,
-        }}
+      <Card
+        title="Lane Management"
+        extra={
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={handleRefresh}
+            loading={loading}
+          >
+            Refresh
+          </Button>
+        }
+      >
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <LaneTable
+            lanes={lanes}
+            onEdit={handleEditLane}
+            onDelete={handleDeleteLane}
+            onRefreshSylectus={handleRefreshSylectus}
+            onSelectLane={handleSelectLane}
+          />
+        </Space>
+      </Card>
+
+      <EditLaneModal
+        lane={editingLane}
+        isOpen={isEditModalOpen}
+        onClose={handleCloseEditModal}
+        onSave={handleSaveLane}
       />
     </div>
   );

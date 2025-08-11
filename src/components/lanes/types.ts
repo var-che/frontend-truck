@@ -1,3 +1,8 @@
+export interface Driver {
+  id: string;
+  driverName: string;
+}
+
 export interface Lane {
   id: string;
   origin: {

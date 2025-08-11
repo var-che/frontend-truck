@@ -4,6 +4,7 @@ import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
+import { LoadBoardSearchResult } from '../types/loadboard';
 
 const { Text } = Typography;
 
@@ -12,8 +13,8 @@ interface LoadBoardResultsProps {
   hasAnySuccess: boolean;
   hasAnyError: boolean;
   allErrors: string;
-  datResult: any;
-  sylectusResult: any;
+  datResult: LoadBoardSearchResult | null;
+  sylectusResult: LoadBoardSearchResult | null;
   datError: string | null;
   sylectusError: string | null;
   extensionConnected?: boolean;
@@ -36,7 +37,10 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
   onSearchDAT,
   onSearchSylectus,
 }) => {
-  const getResultIcon = (result: any, error: string | null) => {
+  const getResultIcon = (
+    result: LoadBoardSearchResult | null,
+    error: string | null,
+  ) => {
     if (result?.success) {
       return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
     }
@@ -46,7 +50,10 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
     return null;
   };
 
-  const getResultStatus = (result: any, error: string | null) => {
+  const getResultStatus = (
+    result: LoadBoardSearchResult | null,
+    error: string | null,
+  ) => {
     if (result?.success) {
       return { type: 'success' as const, message: result.message };
     }
@@ -54,6 +61,79 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
       return { type: 'error' as const, message: error };
     }
     return null;
+  };
+
+  const renderExtensionStatus = () => (
+    <Card size="small" style={{ textAlign: 'left' }}>
+      <Space>
+        <Text strong>Extension Status:</Text>
+        {extensionConnected ? (
+          <span style={{ color: '#52c41a' }}>
+            <CheckCircleOutlined /> Connected
+          </span>
+        ) : (
+          <span style={{ color: '#ff4d4f' }}>
+            <ExclamationCircleOutlined /> Disconnected
+          </span>
+        )}
+      </Space>
+      {!extensionConnected && (
+        <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+          Install and enable the Truckarooskie extension to send searches
+          directly to load boards
+        </div>
+      )}
+    </Card>
+  );
+
+  const renderSearchResult = (
+    result: LoadBoardSearchResult | null,
+    error: string | null,
+    platform: string,
+  ) => {
+    if (!result && !error) return null;
+
+    return (
+      <Card>
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {getResultIcon(result, error)}
+            <Text strong>{platform} Search Result</Text>
+          </div>
+          {(() => {
+            const status = getResultStatus(result, error);
+            return status ? (
+              <Alert message={status.message} type={status.type} showIcon />
+            ) : null;
+          })()}
+          {result?.data && (
+            <div style={{ marginTop: 16 }}>
+              <Text type="secondary">
+                Search completed at:{' '}
+                {new Date(result.data.timestamp).toLocaleString()}
+              </Text>
+              {result.data.mode && (
+                <div style={{ marginTop: 4 }}>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    Mode:{' '}
+                    {result.data.mode === 'simulation'
+                      ? 'Simulated (extension not connected)'
+                      : 'Extension'}
+                  </Text>
+                </div>
+              )}
+              {result.data.loads && (
+                <div style={{ marginTop: 4 }}>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    Found {result.data.loads.length} loads
+                  </Text>
+                </div>
+              )}
+            </div>
+          )}
+        </Space>
+      </Card>
+    );
   };
 
   return (
@@ -80,7 +160,6 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                     Search All Load Boards
                   </Button>
 
-                  {/* Loading Indicator */}
                   {isPosting && (
                     <Card style={{ textAlign: 'center' }}>
                       <Spin size="large" />
@@ -90,14 +169,12 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                     </Card>
                   )}
 
-                  {/* Results Display */}
                   {!isPosting && (hasAnySuccess || hasAnyError) && (
                     <Space
                       direction="vertical"
                       size="small"
                       style={{ width: '100%' }}
                     >
-                      {/* DAT Results */}
                       {(datResult || datError) && (
                         <Card size="small">
                           <Space>
@@ -121,7 +198,6 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                         </Card>
                       )}
 
-                      {/* Sylectus Results */}
                       {(sylectusResult || sylectusError) && (
                         <Card size="small">
                           <Space>
@@ -147,7 +223,6 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                     </Space>
                   )}
 
-                  {/* Overall Error Display */}
                   {hasAnyError && allErrors && !isPosting && (
                     <Alert
                       message="Some searches failed"
@@ -157,7 +232,6 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                     />
                   )}
 
-                  {/* Overall Success Display */}
                   {hasAnySuccess && !hasAnyError && !isPosting && (
                     <Alert
                       message="All searches completed successfully!"
@@ -179,33 +253,7 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                   size="middle"
                   style={{ width: '100%' }}
                 >
-                  {/* Extension Status Indicator */}
-                  <Card size="small" style={{ textAlign: 'left' }}>
-                    <Space>
-                      <Text strong>Extension Status:</Text>
-                      {extensionConnected ? (
-                        <span style={{ color: '#52c41a' }}>
-                          <CheckCircleOutlined /> Connected
-                        </span>
-                      ) : (
-                        <span style={{ color: '#ff4d4f' }}>
-                          <ExclamationCircleOutlined /> Disconnected
-                        </span>
-                      )}
-                    </Space>
-                    {!extensionConnected && (
-                      <div
-                        style={{
-                          marginTop: 8,
-                          fontSize: '12px',
-                          color: '#666',
-                        }}
-                      >
-                        Install and enable the Truckarooskie extension to send
-                        searches directly to DAT
-                      </div>
-                    )}
-                  </Card>
+                  {renderExtensionStatus()}
 
                   <Button
                     type="primary"
@@ -216,7 +264,6 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                     Search DAT Power
                   </Button>
 
-                  {/* Loading Indicator */}
                   {isPosting && (
                     <Card style={{ textAlign: 'center' }}>
                       <Spin size="large" />
@@ -226,56 +273,8 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                     </Card>
                   )}
 
-                  {/* DAT Results */}
-                  {!isPosting && (datResult || datError) && (
-                    <Card>
-                      <Space direction="vertical" style={{ width: '100%' }}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                          }}
-                        >
-                          {getResultIcon(datResult, datError)}
-                          <Text strong>DAT Power Search Result</Text>
-                        </div>
-                        {(() => {
-                          const status = getResultStatus(datResult, datError);
-                          return status ? (
-                            <Alert
-                              message={status.message}
-                              type={status.type}
-                              showIcon
-                            />
-                          ) : null;
-                        })()}
-                        {datResult?.data && (
-                          <div style={{ marginTop: 16 }}>
-                            <Text type="secondary">
-                              Search completed at:{' '}
-                              {new Date(
-                                datResult.data.timestamp,
-                              ).toLocaleString()}
-                            </Text>
-                            {datResult.data.mode && (
-                              <div style={{ marginTop: 4 }}>
-                                <Text
-                                  type="secondary"
-                                  style={{ fontSize: '12px' }}
-                                >
-                                  Mode:{' '}
-                                  {datResult.data.mode === 'simulation'
-                                    ? 'Simulated (extension not connected)'
-                                    : 'Extension'}
-                                </Text>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </Space>
-                    </Card>
-                  )}
+                  {!isPosting &&
+                    renderSearchResult(datResult, datError, 'DAT Power')}
                 </Space>
               </div>
             ),
@@ -290,6 +289,8 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                   size="middle"
                   style={{ width: '100%' }}
                 >
+                  {renderExtensionStatus()}
+
                   <Button
                     type="primary"
                     loading={isPosting}
@@ -299,7 +300,6 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                     Search Sylectus
                   </Button>
 
-                  {/* Loading Indicator */}
                   {isPosting && (
                     <Card style={{ textAlign: 'center' }}>
                       <Spin size="large" />
@@ -309,46 +309,12 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                     </Card>
                   )}
 
-                  {/* Sylectus Results */}
-                  {!isPosting && (sylectusResult || sylectusError) && (
-                    <Card>
-                      <Space direction="vertical" style={{ width: '100%' }}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                          }}
-                        >
-                          {getResultIcon(sylectusResult, sylectusError)}
-                          <Text strong>Sylectus Search Result</Text>
-                        </div>
-                        {(() => {
-                          const status = getResultStatus(
-                            sylectusResult,
-                            sylectusError,
-                          );
-                          return status ? (
-                            <Alert
-                              message={status.message}
-                              type={status.type}
-                              showIcon
-                            />
-                          ) : null;
-                        })()}
-                        {sylectusResult?.data && (
-                          <div style={{ marginTop: 16 }}>
-                            <Text type="secondary">
-                              Search completed at:{' '}
-                              {new Date(
-                                sylectusResult.data.timestamp,
-                              ).toLocaleString()}
-                            </Text>
-                          </div>
-                        )}
-                      </Space>
-                    </Card>
-                  )}
+                  {!isPosting &&
+                    renderSearchResult(
+                      sylectusResult,
+                      sylectusError,
+                      'Sylectus',
+                    )}
                 </Space>
               </div>
             ),

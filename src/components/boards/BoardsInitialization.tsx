@@ -244,6 +244,7 @@ const BoardsInitialization: React.FC = () => {
   return (
     <div style={{ padding: '24px' }}>
       <h1>Board Connections</h1>
+      // In your React component
       <Tabs defaultActiveKey="1" items={items} />
     </div>
   );

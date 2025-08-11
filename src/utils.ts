@@ -219,3 +219,24 @@ function encodeScaledValue(value: bigint | number): string {
 
   return encodeUnsignedNumber(Number(numVal));
 }
+
+/**
+ * Generate a unique search module ID
+ * Format: SM_[timestamp]_[random] (e.g., SM_1642601234567_abc123)
+ */
+export const generateSearchModuleId = (): string => {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 8);
+  return `SM_${timestamp}_${random}`;
+};
+
+/**
+ * Extract timestamp from search module ID
+ */
+export const getSearchModuleTimestamp = (searchModuleId: string): number => {
+  const parts = searchModuleId.split('_');
+  if (parts.length >= 2 && parts[0] === 'SM') {
+    return parseInt(parts[1], 10);
+  }
+  return 0;
+};

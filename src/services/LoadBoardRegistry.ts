@@ -15,7 +15,7 @@ export class LoadBoardRegistry {
   private initializeServices(): void {
     // Register all available load board services
     this.registerService(new DATService(this.messagingFunction));
-    this.registerService(new SylectusService());
+    this.registerService(new SylectusService(this.messagingFunction));
   }
 
   static getInstance(): LoadBoardRegistry {
@@ -29,9 +29,15 @@ export class LoadBoardRegistry {
   setMessagingFunction(
     messagingFunction: (searchData: any) => Promise<any>,
   ): void {
+    console.log(
+      '🔧 LoadBoardRegistry: Setting messaging function and reinitializing services',
+    );
     this.messagingFunction = messagingFunction;
     this.services.clear();
     this.initializeServices();
+    console.log(
+      '✅ LoadBoardRegistry: Services reinitialized with messaging function',
+    );
   }
 
   registerService(service: LoadBoardService): void {

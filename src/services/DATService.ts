@@ -20,11 +20,19 @@ export class DATService implements LoadBoardService {
   transformSearchState(searchState: SearchState): LoadBoardSearchData {
     return {
       origin: searchState.origin
-        ? `${searchState.origin.city}, ${searchState.origin.state}`
+        ? {
+            city: searchState.origin.city,
+            state: searchState.origin.state,
+            name: `${searchState.origin.city}, ${searchState.origin.state}`,
+          }
         : undefined,
       destination: searchState.destination
-        ? `${searchState.destination.city}, ${searchState.destination.state}`
-        : undefined,
+        ? {
+            city: searchState.destination.city,
+            state: searchState.destination.state,
+            name: `${searchState.destination.city}, ${searchState.destination.state}`,
+          }
+        : null,
       startDate: searchState.dateRange[0]
         ? searchState.dateRange[0].format('YYYY-MM-DD')
         : undefined,
@@ -36,6 +44,15 @@ export class DATService implements LoadBoardService {
     };
   }
 
+  /**
+   * Perform a search and return the result (used by hooks for auto-adding lanes)
+   */
+  async performSearch(
+    searchData: LoadBoardSearchData,
+  ): Promise<LoadBoardSearchResult> {
+    return this.search(searchData);
+  }
+
   async search(
     searchData: LoadBoardSearchData,
   ): Promise<LoadBoardSearchResult> {
@@ -45,19 +62,27 @@ export class DATService implements LoadBoardService {
       // Send data to the extension if messaging is available
       if (this.sendSearchMessage) {
         try {
-          const extensionResponse = await this.sendSearchMessage(searchData);
+          // Format the message for the extension
+          const extensionResponse = await this.sendSearchMessage({
+            type: 'DAT_SEARCH',
+            data: searchData,
+            timestamp: Date.now(),
+          });
           console.log('Extension response:', extensionResponse);
 
           // If extension successfully processed the search
           if (extensionResponse?.success) {
             return {
               success: true,
-              message: 'Search executed successfully on DAT via extension',
+              message:
+                extensionResponse.message ||
+                'Search executed successfully on DAT via extension',
               data: {
+                ...extensionResponse.data, // Include all extension response data
+                searchModuleId: searchData.searchModuleId, // Ensure search module ID is preserved
                 provider: this.provider,
-                searchData,
+                originalSearchData: searchData,
                 timestamp: new Date().toISOString(),
-                extensionResponse,
               },
             };
           } else if (extensionResponse?.error) {
@@ -77,10 +102,20 @@ export class DATService implements LoadBoardService {
         success: true,
         message: 'Search executed successfully on DAT (simulated)',
         data: {
+          searchModuleId: searchData.searchModuleId, // Include search module ID
           provider: this.provider,
-          searchData,
+          originalSearchData: searchData,
           timestamp: new Date().toISOString(),
           mode: 'simulation',
+          // Mock some search criteria for the fallback
+          searchCriteria: {
+            origin: { city: 'Mock City', state: 'TX' },
+            destination: { city: 'Mock Destination', state: 'CA' },
+            startDate: searchData.startDate,
+            endDate: searchData.endDate,
+          },
+          resultsFound: 0,
+          datQueryId: `mock_${Date.now()}`,
         },
       };
     } catch (error) {
