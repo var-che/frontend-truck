@@ -16,32 +16,46 @@ export interface SylectusSearchParams {
 
 export interface SylectusLoad {
   id: string;
-  postedBy: string;
-  refNo: string;
-  orderNo: string;
-  loadType: string;
-  brokerMC: string;
+  age: string; // How long posted
+  rate: string; // Rate/amount
+  trip: number; // Trip miles (numeric)
+  origin: string; // Origin city, state
+  dhO: string; // Deadhead origin
+  destination: string; // Destination city, state
+  dhD: string; // Deadhead destination
+  pickUp: string; // Pickup date/time
+  eq: string; // Equipment type
+  length: string; // Length requirement
+  weight: number; // Weight (numeric)
+  capacity: string; // Capacity
+  company: string; // Company name
+  pieces: number; // Number of pieces (numeric)
+
+  // Keep some legacy fields for backward compatibility if needed
+  postedBy?: string;
+  refNo?: string;
+  orderNo?: string;
+  loadType?: string;
+  brokerMC?: string;
   amount?: string;
-  pickupLocation: {
+  pickupLocation?: {
     city: string;
     state: string;
     zipCode?: string;
     fullAddress: string;
   };
-  pickupDateTime: string;
-  deliveryLocation: {
+  pickupDateTime?: string;
+  deliveryLocation?: {
     city: string;
     state: string;
     zipCode?: string;
     fullAddress: string;
   };
-  deliveryDateTime: string;
-  postDateTime: string;
-  expiresOn: string;
-  vehicleSize: string;
-  miles: number;
-  pieces: number;
-  weight: number;
+  deliveryDateTime?: string;
+  postDateTime?: string;
+  expiresOn?: string;
+  vehicleSize?: string;
+  miles?: number;
   notes?: string;
   otherInfo?: string;
   daysToPayCredit?: {

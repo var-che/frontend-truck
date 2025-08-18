@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Table, Tabs, Button, Tag } from 'antd';
-import { PlusOutlined, DollarOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { mockLoads } from '../mocks/loadData';
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
@@ -113,35 +113,52 @@ const LoadsContainer: React.FC<LoadsContainerProps> = ({
     filteredSylectusResults.forEach((result) => {
       if (result.success && result.data?.loads) {
         result.data.loads.forEach((sylectusLoad: any) => {
+          // Debug: Log the raw Sylectus load data
+          console.log('🔍 Raw Sylectus load:', sylectusLoad);
+
+          // Parse origin city/state from the new field structure
+          const originParts = sylectusLoad.origin?.split(',') || [];
+          const originCity = originParts[0]?.trim() || '';
+          const originStateZip = originParts[1]?.trim() || '';
+          const originState = originStateZip.split(' ')[0] || '';
+          const originZip = originStateZip.split(' ')[1] || '';
+
+          // Parse destination city/state from the new field structure
+          const destParts = sylectusLoad.destination?.split(',') || [];
+          const destCity = destParts[0]?.trim() || '';
+          const destStateZip = destParts[1]?.trim() || '';
+          const destState = destStateZip.split(' ')[0] || '';
+          const destZip = destStateZip.split(' ')[1] || '';
+
           const load = {
             id: sylectusLoad.id,
             postedAt:
+              sylectusLoad.pickUp ||
               sylectusLoad.postDateTime ||
-              sylectusLoad.pickupDateTime ||
               new Date().toISOString(),
             origin: {
-              city: sylectusLoad.pickupLocation?.city || '',
-              state: sylectusLoad.pickupLocation?.state || '',
-              zipCode: sylectusLoad.pickupLocation?.zipCode || '',
+              city: originCity,
+              state: originState,
+              zipCode: originZip,
             },
             destination: {
-              city: sylectusLoad.deliveryLocation?.city || '',
-              state: sylectusLoad.deliveryLocation?.state || '',
-              zipCode: sylectusLoad.deliveryLocation?.zipCode || '',
+              city: destCity,
+              state: destState,
+              zipCode: destZip,
             },
             contact: {
-              company: sylectusLoad.postedBy || 'Unknown',
-              name: sylectusLoad.postedBy || 'Unknown',
+              company: sylectusLoad.company || 'Unknown',
+              name: sylectusLoad.company || 'Unknown',
               phone: '', // Not available in Sylectus data
               email: '', // Not available in Sylectus data
             },
-            rate: 0, // Sylectus amount field may need parsing
+            rate: 0, // Sylectus typically doesn't provide rates (shows "Call")
             comment: sylectusLoad.otherInfo || '',
             // Additional fields for filtering and identification
-            equipmentType: sylectusLoad.vehicleSize || '',
-            miles: sylectusLoad.miles || 0,
+            equipmentType: sylectusLoad.eq || 'N/A',
+            miles: sylectusLoad.trip || 0, // Use trip miles from new structure
             weight: sylectusLoad.weight || 0,
-            fullPartial: sylectusLoad.loadType || '',
+            fullPartial: sylectusLoad.loadType || 'N/A',
             deadheadMiles: 0, // Not available in Sylectus data
             creditScore: sylectusLoad.daysToPayCredit?.score || '',
             searchModuleId: result.data.searchModuleId,
@@ -156,6 +173,10 @@ const LoadsContainer: React.FC<LoadsContainerProps> = ({
             bidUrl: sylectusLoad.bidUrl,
             saferUrl: sylectusLoad.saferUrl,
           };
+
+          // Debug: Log the transformed load data
+          console.log('🔍 Transformed load:', load);
+
           allLoads.push(load);
         });
       }
@@ -172,59 +193,139 @@ const LoadsContainer: React.FC<LoadsContainerProps> = ({
       : mockLoads;
   }, [convertSearchResultsToLoads]);
 
-  // Table columns definition
+  // Table columns definition - Updated to show Sylectus/DAT unified view
   const columns = [
     {
-      title: 'Posted',
+      title: 'Company',
+      dataIndex: ['contact', 'company'],
+      key: 'company',
+      width: '12%',
+      ellipsis: true,
+    },
+    {
+      title: 'Age',
       dataIndex: 'postedAt',
-      key: 'postedAt',
-      render: (text: string) => dayjs(text).format('MM/DD HH:mm'),
-      width: '10%',
+      key: 'age',
+      width: '8%',
+      render: (text: string) => {
+        const posted = dayjs(text);
+        const now = dayjs();
+        const diffMinutes = now.diff(posted, 'minute');
+        const diffHours = now.diff(posted, 'hour');
+        const diffDays = now.diff(posted, 'day');
+
+        let ageText = '';
+        let color = 'green';
+
+        if (diffDays > 0) {
+          ageText = `${diffDays}d`;
+          color = 'red';
+        } else if (diffHours > 0) {
+          ageText = `${diffHours}h`;
+          color = 'orange';
+        } else {
+          ageText = `${diffMinutes}m`;
+          color = diffMinutes > 30 ? 'orange' : 'green';
+        }
+
+        return <Tag color={color}>{ageText}</Tag>;
+      },
     },
     {
       title: 'Origin',
       dataIndex: 'origin',
       key: 'origin',
-      render: (origin: any) =>
-        `${origin.city}, ${origin.state} ${origin.zipCode}`,
-      width: '20%',
+      width: '15%',
+      render: (origin: any) => (
+        <div>
+          <div style={{ fontSize: '12px', fontWeight: 'bold' }}>
+            {origin.city}, {origin.state}
+          </div>
+          {origin.zipCode && (
+            <div style={{ fontSize: '10px', color: '#666' }}>
+              {origin.zipCode}
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Destination',
       dataIndex: 'destination',
       key: 'destination',
-      render: (dest: any) => `${dest.city}, ${dest.state} ${dest.zipCode}`,
-      width: '20%',
+      width: '15%',
+      render: (dest: any) => (
+        <div>
+          <div style={{ fontSize: '12px', fontWeight: 'bold' }}>
+            {dest.city}, {dest.state}
+          </div>
+          {dest.zipCode && (
+            <div style={{ fontSize: '10px', color: '#666' }}>
+              {dest.zipCode}
+            </div>
+          )}
+        </div>
+      ),
     },
     {
-      title: 'Company',
-      dataIndex: ['contact', 'company'],
-      key: 'company',
-      width: '20%',
+      title: 'Pickup',
+      dataIndex: 'postedAt',
+      key: 'pickup',
+      width: '10%',
+      render: (text: string) => (
+        <div style={{ fontSize: '11px' }}>
+          {dayjs(text).format('MM/DD HH:mm')}
+        </div>
+      ),
     },
     {
-      title: 'Contact',
-      dataIndex: 'contact',
-      key: 'contact',
-      render: (contact: any) => {
-        const contactInfo = contact.phone || contact.email;
-        return `${contact.name} (${contactInfo})`;
-      },
-      width: '20%',
+      title: 'Equipment',
+      dataIndex: 'equipmentType',
+      key: 'equipment',
+      width: '8%',
+      render: (text: string) => (
+        <div style={{ fontSize: '11px' }}>{text || 'N/A'}</div>
+      ),
+    },
+    {
+      title: 'Miles',
+      dataIndex: 'miles',
+      key: 'miles',
+      width: '8%',
+      render: (text: number) => (
+        <div style={{ textAlign: 'center', fontWeight: 'bold' }}>
+          {text?.toLocaleString() || 0}
+        </div>
+      ),
     },
     {
       title: 'Rate',
       dataIndex: 'rate',
       key: 'rate',
-      render: (rate: number) =>
-        rate ? (
-          <Tag color="green">
-            <DollarOutlined /> ${rate.toLocaleString()}
-          </Tag>
-        ) : (
-          <Tag>Call</Tag>
-        ),
-      width: '10%',
+      width: '8%',
+      render: (text: number) => (
+        <div
+          style={{
+            textAlign: 'center',
+            fontWeight: 'bold',
+            color: '#52c41a',
+          }}
+        >
+          {text > 0 ? `$${text.toLocaleString()}` : 'Call'}
+        </div>
+      ),
+    },
+    {
+      title: 'Specs',
+      key: 'specs',
+      width: '12%',
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: '10px' }}>
+          <div>Weight: {record.weight || 'N/A'}</div>
+          <div>Type: {record.fullPartial || 'N/A'}</div>
+          <div>Source: {record.source || 'N/A'}</div>
+        </div>
+      ),
     },
   ];
 

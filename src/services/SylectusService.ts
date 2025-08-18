@@ -344,6 +344,28 @@ export class SylectusService implements LoadBoardService {
 
         const load: SylectusLoad = {
           id: SylectusService.extractLoadId(cells),
+
+          // Required new fields (mapped from legacy data)
+          age: SylectusService.extractPostDateTime(cells[5]) || 'N/A',
+          rate: SylectusService.extractAmount(cells[2]) || 'N/A',
+          trip: SylectusService.extractMiles(cells[6]),
+          origin:
+            SylectusService.extractPickupLocation(cells[3])?.fullAddress ||
+            'N/A',
+          dhO: 'N/A', // Deadhead origin not available
+          destination:
+            SylectusService.extractDeliveryLocation(cells[4])?.fullAddress ||
+            'N/A',
+          dhD: 'N/A', // Deadhead destination not available
+          pickUp: SylectusService.extractPickupDateTime(cells[3]) || 'N/A',
+          eq: SylectusService.extractVehicleSize(cells[6]) || 'N/A',
+          length: 'N/A', // Length not available
+          weight: SylectusService.extractWeight(cells[7]),
+          capacity: 'N/A', // Capacity not available
+          company: SylectusService.extractPostedBy(cells[0]) || 'N/A',
+          pieces: SylectusService.extractPieces(cells[7]),
+
+          // Legacy fields for backward compatibility
           postedBy: SylectusService.extractPostedBy(cells[0]),
           refNo: SylectusService.extractRefNo(cells[1]),
           orderNo: SylectusService.extractOrderNo(cells[2]),
@@ -358,8 +380,6 @@ export class SylectusService implements LoadBoardService {
           expiresOn: SylectusService.extractExpiresOn(cells[5]),
           vehicleSize: SylectusService.extractVehicleSize(cells[6]),
           miles: SylectusService.extractMiles(cells[6]),
-          pieces: SylectusService.extractPieces(cells[7]),
-          weight: SylectusService.extractWeight(cells[7]),
           otherInfo: SylectusService.extractOtherInfo(cells[8]),
           daysToPayCredit: SylectusService.extractCredit(cells[0]),
           saferUrl: SylectusService.extractSaferUrl(cells[0]),

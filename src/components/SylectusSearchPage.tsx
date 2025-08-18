@@ -15,15 +15,9 @@ import {
   Divider,
   InputNumber,
   Checkbox,
+  Tag,
 } from 'antd';
-import {
-  SearchOutlined,
-  EnvironmentOutlined,
-  TruckOutlined,
-  ClockCircleOutlined,
-  SafetyOutlined,
-  InfoCircleOutlined,
-} from '@ant-design/icons';
+import { SearchOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SylectusSearchParams,
@@ -95,46 +89,58 @@ const SylectusSearchPage: React.FC = () => {
 
   const columns: ColumnsType<SylectusLoad> = [
     {
-      title: 'Posted By',
-      dataIndex: 'postedBy',
-      key: 'postedBy',
-      width: 150,
+      title: 'Company',
+      dataIndex: 'company',
+      key: 'company',
+      width: 120,
+      ellipsis: true,
+    },
+    {
+      title: 'Age',
+      dataIndex: 'age',
+      key: 'age',
+      width: 60,
+      render: (text: string) => (
+        <Tag
+          color={
+            text?.includes('min')
+              ? 'red'
+              : text?.includes('hr')
+              ? 'orange'
+              : 'green'
+          }
+        >
+          {text}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Origin',
+      dataIndex: 'origin',
+      key: 'origin',
+      width: 140,
       render: (text: string, record: SylectusLoad) => (
         <div>
-          <div style={{ fontWeight: 'bold', fontSize: '12px' }}>{text}</div>
-          {record.daysToPayCredit?.days && (
+          <div style={{ fontSize: '12px', fontWeight: 'bold' }}>{text}</div>
+          {record.dhO && (
             <div style={{ fontSize: '10px', color: '#666' }}>
-              Pay: {record.daysToPayCredit.days}d
-            </div>
-          )}
-          {record.daysToPayCredit?.score && (
-            <div style={{ fontSize: '10px', color: '#666' }}>
-              Score: {record.daysToPayCredit.score}
+              DH: {record.dhO}
             </div>
           )}
         </div>
       ),
     },
     {
-      title: 'Load Info',
-      key: 'loadInfo',
-      width: 180,
-      render: (_, record: SylectusLoad) => (
+      title: 'Destination',
+      dataIndex: 'destination',
+      key: 'destination',
+      width: 140,
+      render: (text: string, record: SylectusLoad) => (
         <div>
-          <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
-            {record.refNo} | {record.orderNo}
-          </div>
-          <div style={{ fontSize: '11px', color: '#666' }}>
-            {record.loadType}
-          </div>
-          <div style={{ fontSize: '10px', color: '#888' }}>
-            MC: {record.brokerMC}
-          </div>
-          {record.amount && (
-            <div
-              style={{ fontSize: '12px', color: '#0f9d58', fontWeight: 'bold' }}
-            >
-              {record.amount}
+          <div style={{ fontSize: '12px', fontWeight: 'bold' }}>{text}</div>
+          {record.dhD && (
+            <div style={{ fontSize: '10px', color: '#666' }}>
+              DH: {record.dhD}
             </div>
           )}
         </div>
@@ -142,113 +148,56 @@ const SylectusSearchPage: React.FC = () => {
     },
     {
       title: 'Pickup',
-      key: 'pickup',
-      width: 200,
-      render: (_, record: SylectusLoad) => (
-        <div>
-          <div style={{ fontSize: '12px', fontWeight: 'bold' }}>
-            <EnvironmentOutlined /> {record.pickupLocation.city},{' '}
-            {record.pickupLocation.state}
-          </div>
-          {record.pickupLocation.zipCode && (
-            <div style={{ fontSize: '10px', color: '#666' }}>
-              {record.pickupLocation.zipCode}
-            </div>
-          )}
-          <div style={{ fontSize: '11px', color: '#1976d2' }}>
-            <ClockCircleOutlined /> {record.pickupDateTime}
-          </div>
+      dataIndex: 'pickUp',
+      key: 'pickUp',
+      width: 100,
+      render: (text: string) => <div style={{ fontSize: '11px' }}>{text}</div>,
+    },
+    {
+      title: 'Equipment',
+      dataIndex: 'eq',
+      key: 'eq',
+      width: 80,
+    },
+    {
+      title: 'Trip Miles',
+      dataIndex: 'trip',
+      key: 'trip',
+      width: 70,
+      render: (text: number) => (
+        <div style={{ textAlign: 'center', fontWeight: 'bold' }}>
+          {text?.toLocaleString() || 0}
         </div>
       ),
     },
     {
-      title: 'Delivery',
-      key: 'delivery',
-      width: 200,
-      render: (_, record: SylectusLoad) => (
-        <div>
-          <div style={{ fontSize: '12px', fontWeight: 'bold' }}>
-            <EnvironmentOutlined /> {record.deliveryLocation.city},{' '}
-            {record.deliveryLocation.state}
-          </div>
-          {record.deliveryLocation.zipCode && (
-            <div style={{ fontSize: '10px', color: '#666' }}>
-              {record.deliveryLocation.zipCode}
-            </div>
-          )}
-          <div style={{ fontSize: '11px', color: '#1976d2' }}>
-            <ClockCircleOutlined /> {record.deliveryDateTime}
-          </div>
+      title: 'Rate',
+      dataIndex: 'rate',
+      key: 'rate',
+      width: 80,
+      render: (text: string) => (
+        <div
+          style={{
+            textAlign: 'center',
+            fontWeight: 'bold',
+            color: '#52c41a',
+          }}
+        >
+          {text}
         </div>
       ),
     },
     {
-      title: 'Vehicle & Distance',
-      key: 'vehicle',
+      title: 'Specs',
+      key: 'specs',
       width: 120,
       render: (_, record: SylectusLoad) => (
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', fontWeight: 'bold' }}>
-            <TruckOutlined /> {record.vehicleSize}
-          </div>
-          <div style={{ fontSize: '12px', color: '#666' }}>
-            {record.miles} mi
-          </div>
+        <div style={{ fontSize: '10px' }}>
+          <div>Length: {record.length}</div>
+          <div>Weight: {record.weight}</div>
+          <div>Capacity: {record.capacity}</div>
+          <div>Pieces: {record.pieces}</div>
         </div>
-      ),
-    },
-    {
-      title: 'Weight/Pieces',
-      key: 'cargo',
-      width: 100,
-      render: (_, record: SylectusLoad) => (
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '11px' }}>{record.pieces} pcs</div>
-          <div style={{ fontSize: '11px', color: '#666' }}>
-            {record.weight} lbs
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Posted',
-      dataIndex: 'postDateTime',
-      key: 'posted',
-      width: 120,
-      render: (text: string, record: SylectusLoad) => (
-        <div>
-          <div style={{ fontSize: '10px' }}>{text}</div>
-          <div style={{ fontSize: '10px', color: '#f44336' }}>
-            Exp: {record.expiresOn}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      width: 100,
-      render: (_, record: SylectusLoad) => (
-        <Space direction="vertical" size="small">
-          {record.bidUrl && (
-            <Button
-              type="primary"
-              size="small"
-              onClick={() => window.open(record.bidUrl, '_blank')}
-            >
-              Bid
-            </Button>
-          )}
-          {record.saferUrl && (
-            <Button
-              size="small"
-              onClick={() => window.open(record.saferUrl, '_blank')}
-              icon={<SafetyOutlined />}
-            >
-              SAFER
-            </Button>
-          )}
-        </Space>
       ),
     },
   ];
@@ -457,11 +406,11 @@ const SylectusSearchPage: React.FC = () => {
                   )}
                   <div>
                     <Text strong>Full Pickup Address: </Text>
-                    <Text>{record.pickupLocation.fullAddress}</Text>
+                    <Text>{record.pickupLocation?.fullAddress || 'N/A'}</Text>
                   </div>
                   <div>
                     <Text strong>Full Delivery Address: </Text>
-                    <Text>{record.deliveryLocation.fullAddress}</Text>
+                    <Text>{record.deliveryLocation?.fullAddress || 'N/A'}</Text>
                   </div>
                 </div>
               ),
