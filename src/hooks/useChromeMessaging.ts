@@ -12,6 +12,9 @@ export const useChromeMessaging = () => {
   // Helper to send messages to extension using externally_connectable API
   const sendMessageToExtension = (message: any): Promise<any> => {
     return new Promise((resolve, reject) => {
+      console.log('📤 sendMessageToExtension called with message:', message);
+      console.log('📤 Using extension ID:', EXTENSION_ID);
+
       try {
         // Check if Chrome is available and has the extension API
         if (typeof chrome === 'undefined') {
@@ -26,14 +29,25 @@ export const useChromeMessaging = () => {
           return;
         }
 
+        console.log('✅ Chrome runtime available, sending message...');
+
         // Use sendMessage with extension ID to communicate externally
         if (chrome.runtime.sendMessage) {
+          console.log('📤 Using chrome.runtime.sendMessage...');
+
           // This is the right API for web pages talking to extensions
           chrome.runtime.sendMessage(EXTENSION_ID, message, (response) => {
+            console.log('📨 Received response from extension:', response);
+
             if (chrome.runtime.lastError) {
               console.warn('Chrome runtime error:', chrome.runtime.lastError);
+              console.warn('Error details:', chrome.runtime.lastError.message);
               reject(chrome.runtime.lastError);
             } else {
+              console.log(
+                '✅ Message sent successfully, resolving with response:',
+                response,
+              );
               resolve(response);
             }
           });
@@ -108,13 +122,21 @@ export const useChromeMessaging = () => {
       });
 
       console.log('Extension responded:', response);
+      console.log('🔍 Connection status details:', {
+        datTabConnected: response?.datTabConnected,
+        datTestTabConnected: response?.datTestTabConnected,
+        tabId: response?.tabId,
+        datTestTabId: response?.datTestTabId,
+      });
       setExtensionConnected(true);
 
-      // If we have information about a connected DAT tab
-      if (response?.datTabConnected) {
+      // If we have information about a connected DAT tab OR DAT Test tab
+      if (response?.datTabConnected || response?.datTestTabConnected) {
+        console.log('✅ Setting DAT tab as connected');
         setDatTabConnected(true);
-        setDatTabId(response.tabId);
+        setDatTabId(response.tabId || response.datTestTabId);
       } else {
+        console.log('❌ No DAT tab connection found');
         setDatTabConnected(false);
         setDatTabId(null);
       }
@@ -140,10 +162,16 @@ export const useChromeMessaging = () => {
       console.log('Received message from extension:', message);
 
       // Handle connection status updates
-      if (message.type === 'DAT_TAB_CONNECTED') {
+      if (
+        message.type === 'DAT_TAB_CONNECTED' ||
+        message.type === 'DAT_TEST_TAB_CONNECTED'
+      ) {
         setDatTabConnected(true);
         setDatTabId(message.tabId);
-      } else if (message.type === 'DAT_TAB_DISCONNECTED') {
+      } else if (
+        message.type === 'DAT_TAB_DISCONNECTED' ||
+        message.type === 'DAT_TEST_TAB_DISCONNECTED'
+      ) {
         setDatTabConnected(false);
         setDatTabId(null);
       } else if (message.type === 'EXTENSION_DETECTED') {

@@ -13,6 +13,7 @@ import { TrimbleRoutingProvider } from './context/routing/TrimbleRoutingContext'
 import LoadContainerListing from './components/LoadContainerListing';
 import DriversPage from './components/DriversPage';
 import SylectusSearchPage from './components/SylectusSearchPage';
+import DatTestPage from './components/DatTestPage';
 import TrimbleRoutingPage from './components/routing/trimble/TrimbleRoutingPage';
 
 import { App as AntApp, Layout, Button } from 'antd';
@@ -73,6 +74,7 @@ const App: React.FC = () => {
                     <Route path="/boards" element={<BoardsInitialization />} />
                     <Route path="/drivers" element={<DriversPage />} />
                     <Route path="/sylectus" element={<SylectusSearchPage />} />
+                    <Route path="/dat-test-page" element={<DatTestPage />} />
                     <Route
                       path="/trimble-routing"
                       element={<TrimbleRoutingPage />}
@@ -112,6 +114,7 @@ const AppHeader: React.FC = () => {
       <Button onClick={() => navigate('/test')}>Loads</Button>
       <Button onClick={() => navigate('/drivers')}>Drivers</Button>
       <Button onClick={() => navigate('/sylectus')}>Sylectus</Button>
+      <Button onClick={() => navigate('/dat-test-page')}>DAT Test</Button>
       <Button onClick={() => navigate('/trimble-routing')}>
         Trimble Routing
       </Button>
