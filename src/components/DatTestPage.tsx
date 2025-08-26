@@ -13,6 +13,7 @@ import {
   PlusOutlined,
   EnvironmentOutlined,
   SearchOutlined,
+  TruckOutlined,
 } from '@ant-design/icons';
 import { useChromeMessaging } from '../hooks/useChromeMessaging';
 
@@ -152,6 +153,103 @@ const DatTestPage: React.FC<DatTestPageProps> = () => {
     await sendMessageToDatTest('EXECUTE_SEARCH', searchData);
   };
 
+  // Dynamic lane posting with ZIP code search
+  const handleDynamicLanePosting = async () => {
+    const values = form.getFieldsValue();
+    const zipCode = values.zipCode;
+
+    if (!zipCode) {
+      message.error('Please enter a ZIP code');
+      return;
+    }
+
+    console.log('🎯 Starting dynamic lane posting with ZIP:', zipCode);
+
+    try {
+      // Step 1: Search for city suggestions using the ZIP code
+      console.log('📍 Step 1: Searching for city suggestions...');
+      const citySearchResult = await sendMessageToDatTest(
+        'SIMPLE_CITY_SEARCH',
+        {
+          lookupTerm: zipCode,
+        },
+      );
+
+      console.log('🔍 Full city search result:', citySearchResult);
+      console.log('🔍 City search result structure check:', {
+        success: citySearchResult?.success,
+        hasResult: !!citySearchResult?.result,
+        hasResultResults: !!citySearchResult?.result?.results,
+        hasResultResultsData: !!citySearchResult?.result?.results?.data,
+        hasSuggestions:
+          !!citySearchResult?.result?.results?.data?.locationSuggestions,
+        suggestionCount:
+          citySearchResult?.result?.results?.data?.locationSuggestions?.length,
+      });
+
+      if (
+        !citySearchResult?.success ||
+        !citySearchResult?.result?.results?.data?.locationSuggestions
+      ) {
+        console.log('❌ City search result structure:', citySearchResult);
+        throw new Error('Failed to get city suggestions for ZIP code');
+      }
+
+      const locationSuggestions =
+        citySearchResult.result.results.data.locationSuggestions;
+
+      if (locationSuggestions.length === 0) {
+        throw new Error(`No cities found for ZIP code: ${zipCode}`);
+      }
+
+      // Select the first city suggestion
+      const firstCity = locationSuggestions[0];
+      console.log('🏙️ Selected city:', firstCity);
+
+      message.info(
+        `Selected city: ${firstCity.name} (${firstCity.postalCode})`,
+      );
+
+      // Step 2: Perform dynamic lane posting with the selected city
+      console.log('🚛 Step 2: Performing lane posting with selected city...');
+      console.log('🚛 Data being sent to DYNAMIC_LANE_POSTING:', {
+        zipCode: zipCode,
+        selectedCity: firstCity,
+      });
+
+      const lanePostingResult = await sendMessageToDatTest(
+        'DYNAMIC_LANE_POSTING',
+        {
+          zipCode: zipCode,
+          selectedCity: firstCity,
+        },
+      );
+
+      console.log(
+        '✅ Dynamic lane posting completed with result:',
+        lanePostingResult,
+      );
+
+      if (lanePostingResult?.success) {
+        message.success(
+          `Dynamic lane posting completed successfully for ${firstCity.name}!`,
+        );
+      } else {
+        throw new Error('Lane posting failed');
+      }
+
+      return lanePostingResult;
+    } catch (error) {
+      console.error('❌ Dynamic lane posting failed:', error);
+      message.error(
+        `Dynamic lane posting failed: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+      throw error;
+    }
+  };
+
   return (
     <div style={{ padding: '24px' }}>
       <Title level={2}>DAT Test Page</Title>
@@ -199,6 +297,14 @@ const DatTestPage: React.FC<DatTestPageProps> = () => {
             extra="Equipment code (e.g., SB for Straight Box Truck)"
           >
             <Input placeholder="SB" maxLength={2} />
+          </Form.Item>
+
+          <Form.Item
+            label="ZIP Code"
+            name="zipCode"
+            extra="ZIP code for dynamic origin lookup and lane posting"
+          >
+            <Input placeholder="77002" maxLength={5} />
           </Form.Item>
         </Form>
       </Card>
@@ -294,6 +400,29 @@ const DatTestPage: React.FC<DatTestPageProps> = () => {
               </Button>
               <Text type="secondary">
                 Create new lane, populate fields, and execute search
+              </Text>
+            </Space>
+          </div>
+
+          <Divider />
+
+          {/* Dynamic Lane Posting */}
+          <div>
+            <Title level={4}>Dynamic Lane Posting</Title>
+            <Space>
+              <Button
+                type="primary"
+                icon={<TruckOutlined />}
+                loading={loading}
+                onClick={handleDynamicLanePosting}
+                size="large"
+                style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+              >
+                Search & Post Lane by ZIP
+              </Button>
+              <Text type="secondary">
+                Search city by ZIP code and perform lane posting with dynamic
+                origin
               </Text>
             </Space>
           </div>
