@@ -24,6 +24,7 @@ export class DATService implements LoadBoardService {
             city: searchState.origin.city,
             state: searchState.origin.state,
             name: `${searchState.origin.city}, ${searchState.origin.state}`,
+            zip: searchState.origin.zip, // Include ZIP code for DAT searches
           }
         : undefined,
       destination: searchState.destination
@@ -31,6 +32,7 @@ export class DATService implements LoadBoardService {
             city: searchState.destination.city,
             state: searchState.destination.state,
             name: `${searchState.destination.city}, ${searchState.destination.state}`,
+            zip: searchState.destination.zip, // Include destination ZIP too
           }
         : null,
       startDate: searchState.dateRange[0]
@@ -62,31 +64,51 @@ export class DATService implements LoadBoardService {
       // Send data to the extension if messaging is available
       if (this.sendSearchMessage) {
         try {
-          // Format the message for the extension
-          const extensionResponse = await this.sendSearchMessage({
-            type: 'DAT_SEARCH',
-            data: searchData,
-            timestamp: Date.now(),
-          });
-          console.log('Extension response:', extensionResponse);
+          // Check if we have ZIP-based search data (origin with ZIP)
+          const hasOriginZip = searchData.origin?.zip;
 
-          // If extension successfully processed the search
-          if (extensionResponse?.success) {
-            return {
-              success: true,
-              message:
-                extensionResponse.message ||
-                'Search executed successfully on DAT via extension',
-              data: {
-                ...extensionResponse.data, // Include all extension response data
-                searchModuleId: searchData.searchModuleId, // Ensure search module ID is preserved
-                provider: this.provider,
-                originalSearchData: searchData,
-                timestamp: new Date().toISOString(),
-              },
-            };
-          } else if (extensionResponse?.error) {
-            throw new Error(extensionResponse.error);
+          if (hasOriginZip && searchData.origin && searchData.origin.zip) {
+            console.log(
+              '🎯 Using ZIP-based DAT search with ZIP:',
+              searchData.origin.zip,
+            );
+
+            // Use the ZIP-based search approach (same as DatTestPage)
+            const zipSearchResult = await this.performZipBasedSearch(
+              searchData.origin.zip,
+              searchData,
+            );
+
+            return zipSearchResult;
+          } else {
+            console.log('📝 Using traditional DAT search approach');
+
+            // Format the message for the extension (traditional approach)
+            const extensionResponse = await this.sendSearchMessage({
+              type: 'DAT_SEARCH',
+              data: searchData,
+              timestamp: Date.now(),
+            });
+            console.log('Extension response:', extensionResponse);
+
+            // If extension successfully processed the search
+            if (extensionResponse?.success) {
+              return {
+                success: true,
+                message:
+                  extensionResponse.message ||
+                  'Search executed successfully on DAT via extension',
+                data: {
+                  ...extensionResponse.data, // Include all extension response data
+                  searchModuleId: searchData.searchModuleId, // Ensure search module ID is preserved
+                  provider: this.provider,
+                  originalSearchData: searchData,
+                  timestamp: new Date().toISOString(),
+                },
+              };
+            } else if (extensionResponse?.error) {
+              throw new Error(extensionResponse.error);
+            }
           }
         } catch (extensionError) {
           console.error('Extension communication failed:', extensionError);
@@ -123,6 +145,114 @@ export class DATService implements LoadBoardService {
       return {
         success: false,
         message: `Failed to search on DAT: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      };
+    }
+  }
+
+  /**
+   * Perform ZIP-based search using the same approach as DatTestPage
+   * @param zipCode The ZIP code to search with
+   * @param searchData The original search data for context
+   */
+  private async performZipBasedSearch(
+    zipCode: string,
+    searchData: LoadBoardSearchData,
+  ): Promise<LoadBoardSearchResult> {
+    try {
+      console.log('🎯 Starting ZIP-based DAT search with ZIP:', zipCode);
+
+      // Step 1: Search for city suggestions using the ZIP code
+      console.log('📍 Step 1: Searching for city suggestions...');
+      const citySearchResult = await this.sendSearchMessage!({
+        type: 'DAT_TEST_ACTION',
+        action: 'SIMPLE_CITY_SEARCH',
+        data: {
+          lookupTerm: zipCode,
+        },
+      });
+
+      console.log('🔍 City search result:', citySearchResult);
+
+      if (
+        !citySearchResult?.success ||
+        !citySearchResult?.result?.results?.data?.locationSuggestions
+      ) {
+        throw new Error('Failed to get city suggestions for ZIP code');
+      }
+
+      const locationSuggestions =
+        citySearchResult.result.results.data.locationSuggestions;
+
+      if (locationSuggestions.length === 0) {
+        throw new Error(`No cities found for ZIP code: ${zipCode}`);
+      }
+
+      // Select the first city suggestion
+      const firstCity = locationSuggestions[0];
+      console.log('🏙️ Selected city:', firstCity);
+
+      // Step 2: Perform dynamic lane posting with the selected city
+      console.log('🚛 Step 2: Performing lane posting with selected city...');
+
+      // Use the startDate from search data instead of current date
+      const loadDate = searchData.startDate; // Use the date from your form!
+      console.log('📅 Using search date for lane posting:', loadDate);
+
+      const laneData = {
+        fromZip: zipCode,
+        fromCity: firstCity.city,
+        fromState: firstCity.state,
+        longitude: firstCity.longitude,
+        latitude: firstCity.latitude,
+        equipmentType: 'VAN',
+        loadDate: loadDate, // Use your selected date!
+        maxLength: 26,
+        maxWeight: 10000,
+        maxOriginDeadheadMiles: 150,
+      };
+
+      console.log('🚛 Lane data being sent:', laneData);
+      console.log('🔍 DEBUG: ZIP from search:', zipCode);
+      console.log('🔍 DEBUG: City from suggestions:', firstCity);
+      console.log(
+        '🔍 DEBUG: Full laneData object:',
+        JSON.stringify(laneData, null, 2),
+      );
+
+      const lanePostingResult = await this.sendSearchMessage!({
+        type: 'DAT_TEST_ACTION',
+        action: 'LANE_POSTING_TEST',
+        data: {
+          laneData: laneData,
+        },
+      });
+
+      console.log('✅ ZIP-based lane posting completed:', lanePostingResult);
+
+      if (lanePostingResult?.success) {
+        return {
+          success: true,
+          message: `ZIP-based search completed successfully for ${firstCity.name}!`,
+          data: {
+            searchModuleId: searchData.searchModuleId,
+            provider: this.provider,
+            originalSearchData: searchData,
+            timestamp: new Date().toISOString(),
+            zipCode: zipCode,
+            selectedCity: firstCity,
+            extensionResult: lanePostingResult,
+          },
+        };
+      } else {
+        throw new Error('ZIP-based lane posting failed');
+      }
+    } catch (error) {
+      console.error('ZIP-based DAT search error:', error);
+      return {
+        success: false,
+        message: `Failed to perform ZIP-based DAT search: ${
           error instanceof Error ? error.message : 'Unknown error'
         }`,
       };

@@ -212,16 +212,27 @@ const DatTestPage: React.FC<DatTestPageProps> = () => {
 
       // Step 2: Perform dynamic lane posting with the selected city
       console.log('🚛 Step 2: Performing lane posting with selected city...');
-      console.log('🚛 Data being sent to DYNAMIC_LANE_POSTING:', {
-        zipCode: zipCode,
-        selectedCity: firstCity,
-      });
+
+      // Create proper lane data format with current date
+      const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+
+      const laneData = {
+        fromZip: zipCode,
+        fromCity: firstCity.city,
+        fromState: firstCity.state,
+        equipmentType: 'VAN',
+        loadDate: currentDate, // Dynamic date!
+        maxLength: 26,
+        maxWeight: 10000,
+        maxOriginDeadheadMiles: 150,
+      };
+
+      console.log('🚛 Lane data being sent to LANE_POSTING_TEST:', laneData);
 
       const lanePostingResult = await sendMessageToDatTest(
-        'DYNAMIC_LANE_POSTING',
+        'LANE_POSTING_TEST',
         {
-          zipCode: zipCode,
-          selectedCity: firstCity,
+          laneData: laneData,
         },
       );
 

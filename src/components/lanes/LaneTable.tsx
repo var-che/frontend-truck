@@ -24,6 +24,7 @@ interface LaneTableProps {
   onEdit: (lane: Lane) => void;
   onDelete: (laneId: string) => void;
   onRefreshSylectus?: (lane: Lane) => void;
+  onRefreshDAT?: (lane: Lane) => void;
   onSelectLane?: (lane: Lane) => void;
 }
 
@@ -32,6 +33,7 @@ export const LaneTable: React.FC<LaneTableProps> = ({
   onEdit,
   onDelete,
   onRefreshSylectus,
+  onRefreshDAT,
   onSelectLane,
 }) => {
   const columns: ColumnsType<Lane> = [
@@ -66,7 +68,51 @@ export const LaneTable: React.FC<LaneTableProps> = ({
       title: 'Source',
       dataIndex: 'source',
       key: 'source',
-      render: (source) => source || 'MANUAL',
+      render: (source, record) => {
+        const badges = [];
+        if (record.datQueryId) badges.push('DAT');
+        if (record.sylectusQueryId) badges.push('SYLECTUS');
+
+        if (badges.length > 1) {
+          return (
+            <span style={{ color: '#1890ff' }}>
+              COMBINED ({badges.join(' + ')})
+            </span>
+          );
+        } else if (badges.length === 1) {
+          return badges[0];
+        }
+        return source || 'MANUAL';
+      },
+    },
+    {
+      title: 'Results',
+      key: 'results',
+      render: (_, record) => {
+        const parts = [];
+        if (record.datResultsCount !== undefined) {
+          parts.push(`DAT: ${record.datResultsCount}`);
+        }
+        if (record.sylectusResultsCount !== undefined) {
+          parts.push(`SYL: ${record.sylectusResultsCount}`);
+        }
+
+        if (parts.length > 1) {
+          return (
+            <div>
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                {parts.join(' | ')}
+              </div>
+              <div style={{ fontWeight: 'bold' }}>
+                Total: {record.resultsCount || 0}
+              </div>
+            </div>
+          );
+        } else if (parts.length === 1) {
+          return parts[0];
+        }
+        return record.resultsCount || 0;
+      },
     },
     {
       title: 'Last Refreshed',
@@ -97,12 +143,24 @@ export const LaneTable: React.FC<LaneTableProps> = ({
           >
             Edit
           </Button>
-          {onRefreshSylectus && (
+          {onRefreshDAT && record.datQueryId && (
+            <Button
+              type="link"
+              icon={<ReloadOutlined />}
+              onClick={() => onRefreshDAT(record)}
+              title="Refresh DAT data for this lane"
+              style={{ color: '#52c41a' }}
+            >
+              Refresh DAT
+            </Button>
+          )}
+          {onRefreshSylectus && record.sylectusQueryId && (
             <Button
               type="link"
               icon={<ReloadOutlined />}
               onClick={() => onRefreshSylectus(record)}
               title="Refresh Sylectus data for this lane"
+              style={{ color: '#1890ff' }}
             >
               Refresh Sylectus
             </Button>

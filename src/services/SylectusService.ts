@@ -29,6 +29,7 @@ export class SylectusService implements LoadBoardService {
             city: searchState.origin.city,
             state: searchState.origin.state,
             name: `${searchState.origin.city}, ${searchState.origin.state}`,
+            zip: searchState.origin.zip, // Include ZIP code for consistency
           }
         : undefined,
       destination: searchState.destination
@@ -36,6 +37,7 @@ export class SylectusService implements LoadBoardService {
             city: searchState.destination.city,
             state: searchState.destination.state,
             name: `${searchState.destination.city}, ${searchState.destination.state}`,
+            zip: searchState.destination.zip, // Include destination ZIP too
           }
         : null,
       startDate: searchState.dateRange[0]
@@ -94,6 +96,7 @@ export class SylectusService implements LoadBoardService {
             data: {
               provider: this.provider,
               searchData,
+              originalSearchData: searchData, // Include original search data for lane management
               searchModuleId: searchData.searchModuleId, // Include search module ID
               timestamp: new Date().toISOString(),
               loads: response.loads,
@@ -123,6 +126,7 @@ export class SylectusService implements LoadBoardService {
         data: {
           provider: this.provider,
           searchData,
+          originalSearchData: searchData, // Include original search data for lane management
           searchModuleId: searchData.searchModuleId, // Include search module ID
           timestamp: new Date().toISOString(),
           mode: 'simulation',

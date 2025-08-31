@@ -3,11 +3,13 @@ export interface LoadBoardSearchData {
     city?: string;
     state?: string;
     name?: string;
+    zip?: string; // Add ZIP support for DAT searches
   };
   destination?: {
     city?: string;
     state?: string;
     name?: string;
+    zip?: string; // Add ZIP support for destinations too
   } | null;
   weightPounds?: number;
   startDate?: string;

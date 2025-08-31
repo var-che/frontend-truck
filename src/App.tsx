@@ -15,6 +15,7 @@ import DriversPage from './components/DriversPage';
 import SylectusSearchPage from './components/SylectusSearchPage';
 import DatTestPage from './components/DatTestPage';
 import TrimbleRoutingPage from './components/routing/trimble/TrimbleRoutingPage';
+import { DATLoadsHandler } from './components/DATLoadsHandler';
 
 import { App as AntApp, Layout, Button } from 'antd';
 import LanesContainerList from './components/LanesContainerList';
@@ -43,6 +44,7 @@ const App: React.FC = () => {
     <AntApp>
       <MapProvider>
         <SearchResultsProvider>
+          <DATLoadsHandler />
           <TrimbleRoutingProvider>
             <Router>
               <Layout>

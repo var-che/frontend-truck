@@ -260,6 +260,55 @@ const LanesContainerList: React.FC = () => {
     }
   };
 
+  const handleRefreshDAT = async (lane: Lane) => {
+    try {
+      console.log('🔄 Refreshing DAT data for lane:', lane);
+
+      // Convert lane data to DAT search format
+      const datParams = {
+        origin: `${lane.origin.city}, ${lane.origin.state}`,
+        destination:
+          lane.destination?.city && lane.destination?.state
+            ? `${lane.destination.city}, ${lane.destination.state}`
+            : '',
+        pickupDate: lane.dateRange[0], // Use the lane's date range
+        equipmentType: 'V', // Default to Van
+        datQueryId: lane.datQueryId, // Use existing query ID for refresh
+      };
+
+      // Prepare the message for the extension
+      const extensionMessage = {
+        type: 'DAT_SEARCH',
+        params: datParams,
+        isRefresh: true, // Flag to indicate this is a refresh operation
+      };
+
+      console.log('📨 Sending DAT refresh message:', extensionMessage);
+
+      // Send message to extension
+      if (window.chrome && window.chrome.runtime) {
+        window.chrome.runtime.sendMessage(extensionMessage, (response: any) => {
+          if (window.chrome.runtime.lastError) {
+            console.error(
+              'Extension communication error:',
+              window.chrome.runtime.lastError,
+            );
+            message.error('Failed to communicate with browser extension');
+          } else {
+            console.log('✅ DAT refresh message sent successfully:', response);
+            message.success('DAT refresh initiated');
+          }
+        });
+      } else {
+        console.warn('Chrome extension not available');
+        message.warning('Browser extension not detected');
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing DAT data:', error);
+      message.error('Failed to refresh DAT data');
+    }
+  };
+
   // Get search results for the selected lane
   const getSelectedLaneResults = () => {
     if (!selectedLane) return [];
@@ -268,9 +317,12 @@ const LanesContainerList: React.FC = () => {
     return allResults.filter((result) => {
       const searchModuleId = result.data?.searchModuleId;
       return (
+        searchModuleId === selectedLane.datSearchModuleId ||
+        searchModuleId === selectedLane.sylectusSearchModuleId ||
+        searchModuleId === selectedLane.searchModuleId || // Legacy support
+        // Fallback: also check backend query IDs (less reliable but for backwards compatibility)
         searchModuleId === selectedLane.datQueryId ||
-        searchModuleId === selectedLane.sylectusQueryId ||
-        searchModuleId === selectedLane.searchModuleId
+        searchModuleId === selectedLane.sylectusQueryId
       );
     });
   };
@@ -378,6 +430,7 @@ const LanesContainerList: React.FC = () => {
             onEdit={handleEditLane}
             onDelete={handleDeleteLane}
             onRefreshSylectus={handleRefreshSylectus}
+            onRefreshDAT={handleRefreshDAT}
             onSelectLane={handleSelectLane}
           />
         </Space>

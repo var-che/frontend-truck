@@ -1,6 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const EXTENSION_ID = 'pgdncppejlbjbpbifphhmjiebjdpgehi';
+
+interface DATLoadsMessage {
+  type: 'DAT_LOADS_RECEIVED';
+  queryId: string;
+  loads: any[];
+  matchCount: number;
+  timestamp: string;
+  provider: string;
+}
 
 export const useChromeMessaging = () => {
   const [extensionConnected, setExtensionConnected] = useState(false);
@@ -8,13 +17,13 @@ export const useChromeMessaging = () => {
   const [datTabId, setDatTabId] = useState<number | null>(null);
   const [pongMessage, setPongMessage] = useState('');
   const [checkingConnection, setCheckingConnection] = useState(false);
+  const onDATLoadsReceivedRef = useRef<
+    ((data: DATLoadsMessage) => void) | null
+  >(null);
 
   // Helper to send messages to extension using externally_connectable API
-  const sendMessageToExtension = (message: any): Promise<any> => {
+  const sendMessageToExtension = useCallback((message: any): Promise<any> => {
     return new Promise((resolve, reject) => {
-      console.log('📤 sendMessageToExtension called with message:', message);
-      console.log('📤 Using extension ID:', EXTENSION_ID);
-
       try {
         // Check if Chrome is available and has the extension API
         if (typeof chrome === 'undefined') {
@@ -29,25 +38,15 @@ export const useChromeMessaging = () => {
           return;
         }
 
-        console.log('✅ Chrome runtime available, sending message...');
-
         // Use sendMessage with extension ID to communicate externally
         if (chrome.runtime.sendMessage) {
-          console.log('📤 Using chrome.runtime.sendMessage...');
-
           // This is the right API for web pages talking to extensions
           chrome.runtime.sendMessage(EXTENSION_ID, message, (response) => {
-            console.log('📨 Received response from extension:', response);
-
             if (chrome.runtime.lastError) {
               console.warn('Chrome runtime error:', chrome.runtime.lastError);
               console.warn('Error details:', chrome.runtime.lastError.message);
               reject(chrome.runtime.lastError);
             } else {
-              console.log(
-                '✅ Message sent successfully, resolving with response:',
-                response,
-              );
               resolve(response);
             }
           });
@@ -97,10 +96,10 @@ export const useChromeMessaging = () => {
         reject(error);
       }
     });
-  };
+  }, []);
 
   // Check if extension is available
-  const checkExtensionAvailability = async () => {
+  const checkExtensionAvailability = useCallback(async () => {
     setCheckingConnection(true);
     try {
       // First try postMessage to check if extension is injected
@@ -121,22 +120,13 @@ export const useChromeMessaging = () => {
         type: 'CONNECTION_CHECK',
       });
 
-      console.log('Extension responded:', response);
-      console.log('🔍 Connection status details:', {
-        datTabConnected: response?.datTabConnected,
-        datTestTabConnected: response?.datTestTabConnected,
-        tabId: response?.tabId,
-        datTestTabId: response?.datTestTabId,
-      });
       setExtensionConnected(true);
 
       // If we have information about a connected DAT tab OR DAT Test tab
       if (response?.datTabConnected || response?.datTestTabConnected) {
-        console.log('✅ Setting DAT tab as connected');
         setDatTabConnected(true);
         setDatTabId(response.tabId || response.datTestTabId);
       } else {
-        console.log('❌ No DAT tab connection found');
         setDatTabConnected(false);
         setDatTabId(null);
       }
@@ -147,7 +137,7 @@ export const useChromeMessaging = () => {
     } finally {
       setCheckingConnection(false);
     }
-  };
+  }, [sendMessageToExtension]);
 
   // Set up message listener for events from extension
   useEffect(() => {
@@ -176,6 +166,24 @@ export const useChromeMessaging = () => {
         setDatTabId(null);
       } else if (message.type === 'EXTENSION_DETECTED') {
         setExtensionConnected(true);
+      } else if (message.type === 'DAT_LOADS_RECEIVED') {
+        // Handle DAT loads data
+        console.log('📦 Received DAT loads for queryId:', message.queryId, {
+          loadCount: message.loads?.length || 0,
+          matchCount: message.matchCount,
+        });
+        if (
+          onDATLoadsReceivedRef.current &&
+          typeof onDATLoadsReceivedRef.current === 'function'
+        ) {
+          console.log('✅ Calling DAT loads callback with message:', message);
+          onDATLoadsReceivedRef.current(message as DATLoadsMessage);
+        } else {
+          console.warn(
+            '⚠️ No DAT loads callback registered or callback is not a function:',
+            onDATLoadsReceivedRef.current,
+          );
+        }
       }
     };
 
@@ -192,7 +200,7 @@ export const useChromeMessaging = () => {
       window.removeEventListener('message', handleExtensionMessage);
       clearInterval(intervalId);
     };
-  }, []);
+  }, [checkExtensionAvailability]);
 
   // Send a ping to the DAT tab
   const pingDatTab = async () => {
@@ -215,6 +223,18 @@ export const useChromeMessaging = () => {
     }
   };
 
+  // Function to set the DAT loads callback
+  const setDATLoadsCallback = useCallback(
+    (callback: ((data: DATLoadsMessage) => void) | null) => {
+      console.log(
+        '🔧 Setting DAT loads callback:',
+        callback ? 'Function provided' : 'Clearing callback',
+      );
+      onDATLoadsReceivedRef.current = callback;
+    },
+    [],
+  );
+
   return {
     extensionConnected,
     datTabConnected,
@@ -224,5 +244,7 @@ export const useChromeMessaging = () => {
     checkExtensionAvailability,
     checkingConnection,
     sendMessageToExtension,
+    // Function to register DAT loads callback
+    setDATLoadsCallback,
   };
 };
