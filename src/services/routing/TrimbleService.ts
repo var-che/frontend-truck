@@ -160,22 +160,31 @@ export class TrimbleRoutingService {
     console.log('Final extracted distance:', totalDistance, 'time:', totalTime);
 
     // Create segments based on waypoints
-    // For now, we'll distribute the total distance equally between segments
-    // This is a simplified approach until we can access detailed segment data from Trimble SDK
+    // Calculate actual distances between consecutive waypoints
     const segments: RouteSegment[] = [];
     if (waypoints.length > 1) {
-      const segmentCount = waypoints.length - 1;
-      const avgSegmentDistance = totalDistance / segmentCount;
-      const avgSegmentTime = totalTime / segmentCount;
+      for (let i = 1; i < waypoints.length; i++) {
+        const fromWaypoint = waypoints[i - 1];
+        const toWaypoint = waypoints[i];
 
-      for (let i = 0; i < segmentCount; i++) {
+        // Calculate actual distance between consecutive waypoints
+        const segmentDistance = this.haversineDistance(
+          fromWaypoint.lat,
+          fromWaypoint.lng,
+          toWaypoint.lat,
+          toWaypoint.lng,
+        );
+
+        // Estimate time based on distance (rough estimate: 1.2 minutes per mile)
+        const segmentTime = segmentDistance * 1.2;
+
         segments.push({
-          distance: avgSegmentDistance,
-          duration: avgSegmentTime,
+          distance: segmentDistance,
+          duration: segmentTime,
         });
       }
 
-      console.log('Created segments:', segments);
+      console.log('Created segments with individual distances:', segments);
     }
 
     // Calculate fuel cost
@@ -199,19 +208,36 @@ export class TrimbleRoutingService {
    */
   private processRoute(route: any, responseData: any): Route {
     try {
-      // Create segments with simple distance distribution
+      // Create segments with actual distances between consecutive waypoints
       const totalDistance = route.totalMiles;
-      const numSegments = Math.max(1, route.waypoints.length - 1);
-      const avgSegmentDistance = totalDistance / numSegments;
+      const routeSegments = [];
 
-      const routeSegments = route.waypoints
-        .slice(1)
-        .map((waypoint: any, index: number) => ({
-          from: route.waypoints[index],
-          to: waypoint,
-          distance: avgSegmentDistance,
-          duration: 0, // Simple equal distribution
-        }));
+      if (route.waypoints.length > 1) {
+        for (let i = 1; i < route.waypoints.length; i++) {
+          const fromWaypoint = route.waypoints[i - 1];
+          const toWaypoint = route.waypoints[i];
+
+          // Calculate actual distance between consecutive waypoints
+          const segmentDistance = this.haversineDistance(
+            fromWaypoint.lat,
+            fromWaypoint.lng,
+            toWaypoint.lat,
+            toWaypoint.lng,
+          );
+
+          routeSegments.push({
+            from: fromWaypoint,
+            to: toWaypoint,
+            distance: segmentDistance,
+            duration: segmentDistance * 1.2, // Rough estimate: 1.2 minutes per mile
+          });
+        }
+      }
+
+      console.log(
+        'Created route segments with individual distances:',
+        routeSegments,
+      );
 
       return {
         id: `route-${Date.now()}`,
@@ -219,7 +245,10 @@ export class TrimbleRoutingService {
         waypoints: route.waypoints,
         segments: routeSegments,
         totalDistance: totalDistance,
-        totalDuration: 0,
+        totalDuration: routeSegments.reduce(
+          (total, segment) => total + segment.duration,
+          0,
+        ),
         geometry: route.geometry,
         color: this.getNextRouteColor(),
         estimatedFuelCost: 0,
