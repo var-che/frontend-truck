@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Space, Button, message } from 'antd';
 import { ReloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useLaneAutoAdd } from '../hooks/useLaneAutoAdd';
@@ -32,7 +32,34 @@ const LanesContainerList: React.FC = () => {
   } = useSearchResults();
 
   // Get Chrome messaging capabilities
-  const { sendMessageToExtension } = useChromeMessaging();
+  const { sendMessageToExtension, setDATSearchFindingsCallback } =
+    useChromeMessaging();
+
+  // State to store DAT search findings by lane ID
+  const [datSearchFindings, setDatSearchFindings] = useState<
+    Record<string, any>
+  >({});
+
+  // Set up DAT search findings callback
+  useEffect(() => {
+    const handleDATSearchFindings = (data: any) => {
+      console.log('🔍 Received DAT search findings:', data);
+
+      // Store the findings by lane ID
+      setDatSearchFindings((prev) => ({
+        ...prev,
+        [data.laneId]: data.findings,
+      }));
+    };
+
+    // Register the callback
+    setDATSearchFindingsCallback(handleDATSearchFindings);
+
+    // Cleanup
+    return () => {
+      setDATSearchFindingsCallback(null);
+    };
+  }, [setDATSearchFindingsCallback]);
 
   // Auto-add successful search results to lanes
   useLaneAutoAdd({
@@ -40,6 +67,24 @@ const LanesContainerList: React.FC = () => {
     datResult: latestDatResult,
     sylectusResult: latestSylectusResult,
   });
+
+  // Set up DAT search findings callback on mount
+  useEffect(() => {
+    setDATSearchFindingsCallback((findings) => {
+      console.log('DAT search findings received:', findings);
+
+      // Update state with new findings
+      setDatSearchFindings((prevFindings) => ({
+        ...prevFindings,
+        ...findings,
+      }));
+    });
+
+    // Cleanup function to reset callback
+    return () => {
+      setDATSearchFindingsCallback(null);
+    };
+  }, [setDATSearchFindingsCallback]);
 
   const handleRefresh = async () => {
     setLoading(true);
@@ -313,8 +358,11 @@ const LanesContainerList: React.FC = () => {
   const getSelectedLaneResults = () => {
     if (!selectedLane) return [];
 
+    const results = [];
+
+    // Get traditional search results
     const allResults = [...datResults, ...sylectusResults];
-    return allResults.filter((result) => {
+    const traditionalResults = allResults.filter((result) => {
       const searchModuleId = result.data?.searchModuleId;
       return (
         searchModuleId === selectedLane.datSearchModuleId ||
@@ -325,6 +373,38 @@ const LanesContainerList: React.FC = () => {
         searchModuleId === selectedLane.sylectusQueryId
       );
     });
+
+    results.push(...traditionalResults);
+
+    // Get DAT search findings if available for this lane
+    // Try to match by various lane identifiers
+    const laneIdentifiers = [
+      selectedLane.id,
+      selectedLane.datQueryId,
+      selectedLane.datSearchModuleId,
+      selectedLane.searchModuleId,
+    ].filter((id): id is string => Boolean(id));
+
+    for (const identifier of laneIdentifiers) {
+      if (datSearchFindings[identifier]) {
+        const findings = datSearchFindings[identifier];
+        // Convert DAT search findings to the expected format
+        results.push({
+          data: {
+            searchModuleId: identifier,
+            provider: 'DAT',
+            timestamp: findings.timestamp,
+            matchCounts: findings.matchCounts,
+            matches: findings.matches,
+            loads: findings.matches || [], // Add loads property for compatibility
+          },
+          provider: 'DAT',
+        });
+        break; // Only add one DAT finding per lane
+      }
+    }
+
+    return results;
   };
 
   // If a lane is selected, show the lane loads view
@@ -368,17 +448,35 @@ const LanesContainerList: React.FC = () => {
             <div>
               {laneResults.map((searchResult, index) => {
                 const searchModuleId = searchResult.data?.searchModuleId;
-                const provider = searchResult.data?.provider || 'Unknown';
-                const loadCount =
-                  searchResult.data?.loads?.length ||
-                  searchResult.data?.rawResponse?.data?.createAssetAndGetMatches
-                    ?.assetMatchesBody?.matches?.length ||
-                  0;
+                const provider =
+                  searchResult.data?.provider ||
+                  (searchResult as any).provider ||
+                  'Unknown';
+
+                // Handle different data structures for load count
+                let loadCount = 0;
+                if (searchResult.data?.loads?.length) {
+                  loadCount = searchResult.data.loads.length;
+                } else if (searchResult.data?.matches?.length) {
+                  // DAT search findings format
+                  loadCount = searchResult.data.matches.length;
+                } else if (
+                  (searchResult.data as any)?.rawResponse?.data
+                    ?.createAssetAndGetMatches?.assetMatchesBody?.matches
+                    ?.length
+                ) {
+                  // Legacy format
+                  loadCount = (searchResult.data as any).rawResponse.data
+                    .createAssetAndGetMatches.assetMatchesBody.matches.length;
+                }
 
                 if (!searchModuleId) return null;
 
                 return (
-                  <div key={searchModuleId} style={{ marginBottom: '24px' }}>
+                  <div
+                    key={`${searchModuleId}-${index}`}
+                    style={{ marginBottom: '24px' }}
+                  >
                     <LoadsContainer
                       searchModuleId={searchModuleId}
                       searchResult={searchResult}

@@ -11,6 +11,23 @@ interface DATLoadsMessage {
   provider: string;
 }
 
+interface DATSearchFindingsMessage {
+  type: 'DAT_SEARCH_FINDINGS';
+  laneId: string;
+  findings: {
+    matches: any[];
+    matchCounts: {
+      totalCount: number;
+      normal: number;
+      preferred: number;
+      blocked: number;
+      privateNetwork: number;
+    };
+    timestamp: string;
+    provider: string;
+  };
+}
+
 export const useChromeMessaging = () => {
   const [extensionConnected, setExtensionConnected] = useState(false);
   const [datTabConnected, setDatTabConnected] = useState(false);
@@ -19,6 +36,9 @@ export const useChromeMessaging = () => {
   const [checkingConnection, setCheckingConnection] = useState(false);
   const onDATLoadsReceivedRef = useRef<
     ((data: DATLoadsMessage) => void) | null
+  >(null);
+  const onDATSearchFindingsReceivedRef = useRef<
+    ((data: DATSearchFindingsMessage) => void) | null
   >(null);
 
   // Helper to send messages to extension using externally_connectable API
@@ -184,6 +204,33 @@ export const useChromeMessaging = () => {
             onDATLoadsReceivedRef.current,
           );
         }
+      } else if (message.type === 'DAT_SEARCH_FINDINGS') {
+        // Handle DAT search findings data
+        console.log(
+          '🔍 Received DAT search findings for laneId:',
+          message.laneId,
+          {
+            matchCount: message.findings?.matches?.length || 0,
+            totalCount: message.findings?.matchCounts?.totalCount || 0,
+          },
+        );
+        if (
+          onDATSearchFindingsReceivedRef.current &&
+          typeof onDATSearchFindingsReceivedRef.current === 'function'
+        ) {
+          console.log(
+            '✅ Calling DAT search findings callback with message:',
+            message,
+          );
+          onDATSearchFindingsReceivedRef.current(
+            message as DATSearchFindingsMessage,
+          );
+        } else {
+          console.warn(
+            '⚠️ No DAT search findings callback registered or callback is not a function:',
+            onDATSearchFindingsReceivedRef.current,
+          );
+        }
       }
     };
 
@@ -227,10 +274,21 @@ export const useChromeMessaging = () => {
   const setDATLoadsCallback = useCallback(
     (callback: ((data: DATLoadsMessage) => void) | null) => {
       console.log(
-        '🔧 Setting DAT loads callback:',
-        callback ? 'Function provided' : 'Clearing callback',
+        '� Registering DAT loads callback:',
+        typeof callback === 'function' ? 'function' : callback,
       );
       onDATLoadsReceivedRef.current = callback;
+    },
+    [],
+  );
+
+  const setDATSearchFindingsCallback = useCallback(
+    (callback: ((data: DATSearchFindingsMessage) => void) | null) => {
+      console.log(
+        '🔗 Registering DAT search findings callback:',
+        typeof callback === 'function' ? 'function' : callback,
+      );
+      onDATSearchFindingsReceivedRef.current = callback;
     },
     [],
   );
@@ -246,5 +304,7 @@ export const useChromeMessaging = () => {
     sendMessageToExtension,
     // Function to register DAT loads callback
     setDATLoadsCallback,
+    // Function to register DAT search findings callback
+    setDATSearchFindingsCallback,
   };
 };

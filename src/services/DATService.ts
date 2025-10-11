@@ -196,9 +196,8 @@ export class DATService implements LoadBoardService {
       // Step 2: Perform dynamic lane posting with the selected city
       console.log('🚛 Step 2: Performing lane posting with selected city...');
 
-      // Use the startDate from search data instead of current date
-      const loadDate = searchData.startDate; // Use the date from your form!
-      console.log('📅 Using search date for lane posting:', loadDate);
+      // Create proper lane data format with current date
+      const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
       const laneData = {
         fromZip: zipCode,
@@ -207,7 +206,7 @@ export class DATService implements LoadBoardService {
         longitude: firstCity.longitude,
         latitude: firstCity.latitude,
         equipmentType: 'VAN',
-        loadDate: loadDate, // Use your selected date!
+        loadDate: currentDate, // Dynamic date!
         maxLength: 26,
         maxWeight: 10000,
         maxOriginDeadheadMiles: 150,

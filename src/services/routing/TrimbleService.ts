@@ -50,7 +50,7 @@ export class TrimbleRoutingService {
 
       // Convert waypoints to TrimbleMaps.LngLat
       const trimbleWaypoints = waypoints.map(
-        wp => new TrimbleMaps.LngLat(wp.lng, wp.lat),
+        (wp) => new TrimbleMaps.LngLat(wp.lng, wp.lat),
       );
       console.log('Converted to Trimble waypoints:', trimbleWaypoints);
 
@@ -60,7 +60,7 @@ export class TrimbleRoutingService {
       const routeData = {
         waypoints: trimbleWaypoints,
         distance: totalDistance,
-        time: totalDistance * 1.2 // rough estimate: 1.2 minutes per mile
+        time: totalDistance * 1.2, // rough estimate: 1.2 minutes per mile
       };
       console.log('Simulated route data:', routeData);
 
@@ -110,7 +110,7 @@ export class TrimbleRoutingService {
     // Extract waypoints with coordinates
     const waypoints = originalWaypoints.map((wp, index) => ({
       ...wp,
-      sequenceNumber: index
+      sequenceNumber: index,
     }));
 
     // Extract geometry for map display
@@ -119,7 +119,10 @@ export class TrimbleRoutingService {
       const geom = routeData.getGeometry();
       console.log('Geometry from getGeometry():', geom);
       if (geom && Array.isArray(geom)) {
-        geometry = geom.map((point: any) => [point.lng || point.x, point.lat || point.y]);
+        geometry = geom.map((point: any) => [
+          point.lng || point.x,
+          point.lat || point.y,
+        ]);
       }
     }
 
@@ -164,14 +167,14 @@ export class TrimbleRoutingService {
       const segmentCount = waypoints.length - 1;
       const avgSegmentDistance = totalDistance / segmentCount;
       const avgSegmentTime = totalTime / segmentCount;
-      
+
       for (let i = 0; i < segmentCount; i++) {
         segments.push({
           distance: avgSegmentDistance,
           duration: avgSegmentTime,
         });
       }
-      
+
       console.log('Created segments:', segments);
     }
 
@@ -194,22 +197,21 @@ export class TrimbleRoutingService {
   /**
    * Process route data from SDK into our Route format
    */
-  private processRoute(
-    route: any,
-    responseData: any
-  ): Route {
+  private processRoute(route: any, responseData: any): Route {
     try {
       // Create segments with simple distance distribution
       const totalDistance = route.totalMiles;
       const numSegments = Math.max(1, route.waypoints.length - 1);
       const avgSegmentDistance = totalDistance / numSegments;
 
-      const routeSegments = route.waypoints.slice(1).map((waypoint: any, index: number) => ({
-        from: route.waypoints[index],
-        to: waypoint,
-        distance: avgSegmentDistance,
-        duration: 0 // Simple equal distribution
-      }));
+      const routeSegments = route.waypoints
+        .slice(1)
+        .map((waypoint: any, index: number) => ({
+          from: route.waypoints[index],
+          to: waypoint,
+          distance: avgSegmentDistance,
+          duration: 0, // Simple equal distribution
+        }));
 
       return {
         id: `route-${Date.now()}`,
@@ -221,7 +223,7 @@ export class TrimbleRoutingService {
         geometry: route.geometry,
         color: this.getNextRouteColor(),
         estimatedFuelCost: 0,
-        estimatedToll: 0
+        estimatedToll: 0,
       };
     } catch (error) {
       console.error('Error processing route:', error);
@@ -234,27 +236,40 @@ export class TrimbleRoutingService {
    */
   private calculateTotalDistance(waypoints: Waypoint[]): number {
     if (waypoints.length < 2) return 0;
-    
+
     let totalDistance = 0;
     for (let i = 1; i < waypoints.length; i++) {
       const prev = waypoints[i - 1];
       const curr = waypoints[i];
-      totalDistance += this.haversineDistance(prev.lat, prev.lng, curr.lat, curr.lng);
+      totalDistance += this.haversineDistance(
+        prev.lat,
+        prev.lng,
+        curr.lat,
+        curr.lng,
+      );
     }
-    
+
     return totalDistance;
   }
 
   /**
    * Calculate distance between two points using Haversine formula
    */
-  private haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  private haversineDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
     const R = 3959; // Radius of the Earth in miles
     const dLat = this.degToRad(lat2 - lat1);
     const dLon = this.degToRad(lon2 - lon1);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(this.degToRad(lat1)) * Math.cos(this.degToRad(lat2)) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.degToRad(lat1)) *
+        Math.cos(this.degToRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }
@@ -280,12 +295,16 @@ export class TrimbleRoutingService {
       '#98D8C8', // Mint
       '#F7DC6F', // Light Yellow
       '#BB8FCE', // Light Purple
-      '#85C1E9'  // Light Blue
+      '#85C1E9', // Light Blue
     ];
-    
-    const usedColors = Array.from(this.activeRoutes.values()).map(route => route.color);
-    const availableColors = colors.filter(color => !usedColors.includes(color));
-    
+
+    const usedColors = Array.from(this.activeRoutes.values()).map(
+      (route) => route.color,
+    );
+    const availableColors = colors.filter(
+      (color) => !usedColors.includes(color),
+    );
+
     return availableColors.length > 0 ? availableColors[0] : colors[0];
   }
 
@@ -297,33 +316,55 @@ export class TrimbleRoutingService {
 
     try {
       const region = 'NA'; // Default to North America
-      const dataset = 'default';
-      const maxResults = 10;
+      const maxResults = 5;
 
-      const url = `${this.baseUrl}/search?query=${encodeURIComponent(
-        query,
-      )}&region=${region}&dataset=${dataset}&maxResults=${maxResults}&key=${this.apiKey}`;
+      // Use the correct Trimble Maps Single Search API endpoint structure
+      const url = `${this.baseUrl}/${region}/api/search?authToken=${
+        this.apiKey
+      }&query=${encodeURIComponent(query)}&maxResults=${maxResults}`;
+
+      console.log('🔍 Trimble API call:', url);
 
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`Search failed: ${response.statusText}`);
+        console.error(
+          '❌ Trimble API error:',
+          response.status,
+          response.statusText,
+        );
+        throw new Error(
+          `Search failed: ${response.status} ${response.statusText}`,
+        );
       }
 
       const data = await response.json();
-      
-      if (!data.results || !Array.isArray(data.results)) {
+      console.log('✅ Trimble API response:', data);
+
+      // Parse the response according to actual Trimble Maps API format
+      if (
+        !data ||
+        data.Err !== 0 ||
+        !data.Locations ||
+        !Array.isArray(data.Locations)
+      ) {
+        console.warn(
+          '⚠️ Unexpected Trimble API response format or error:',
+          data,
+        );
         return [];
       }
 
-      return data.results.map((result: any, index: number) => ({
+      return data.Locations.map((location: any, index: number) => ({
         id: `search-${index}`,
-        lat: result.coords?.lat || 0,
-        lng: result.coords?.lon || 0,
-        address: result.address?.formattedAddress || result.name || query,
-        city: result.address?.city || '',
-        state: result.address?.state || '',
-        zipCode: result.address?.zip || '',
-        country: result.address?.country || 'US',
+        lat: parseFloat(location.Coords?.Lat || '0'),
+        lng: parseFloat(location.Coords?.Lon || '0'),
+        address:
+          location.ShortString ||
+          `${location.Address?.City || ''}, ${location.Address?.State || ''}`,
+        city: location.Address?.City || '',
+        state: location.Address?.State || '',
+        zipCode: location.Address?.Zip || '',
+        country: location.Address?.Country || 'US',
       }));
     } catch (error) {
       console.error('Location search error:', error);
