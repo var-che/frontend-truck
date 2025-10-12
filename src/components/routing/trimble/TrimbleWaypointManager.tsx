@@ -172,7 +172,7 @@ const TrimbleWaypointManager: React.FC<TrimbleWaypointManagerProps> = ({
   } = useTrimbleRouting();
   const [newAddress, setNewAddress] = useState('');
   const [searchOptions, setSearchOptions] = useState<
-    { value: string; label: string }[]
+    { key: string; value: string; label: string }[]
   >([]);
   const [isSearching, setIsSearching] = useState(false);
 
@@ -238,6 +238,7 @@ const TrimbleWaypointManager: React.FC<TrimbleWaypointManagerProps> = ({
     try {
       const locations = await searchLocations(value);
       const options = locations.map((location) => ({
+        key: location.id, // Add unique key for each option
         value: location.address || `${location.lat}, ${location.lng}`,
         label: location.address || `${location.lat}, ${location.lng}`,
       }));

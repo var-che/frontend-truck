@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Collapse, List, AutoComplete, Button } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
 import { debounce } from 'lodash';
@@ -67,28 +67,27 @@ const TripWaypoints: React.FC<{
     console.log('TripWaypoints received new waypoints:', waypoints);
   }, [waypoints]);
 
-  const fetchCitySuggestions = useCallback(
-    debounce(async (query: string) => {
-      if (!query) return;
+  const fetchCitySuggestions = async (query: string) => {
+    if (!query) return;
 
-      const url = `https://geocode.search.hereapi.com/v1/geocode?q=${query}&apikey=${apiKey}`;
-      const response = await fetch(url);
-      const data = await response.json();
+    const url = `https://geocode.search.hereapi.com/v1/geocode?q=${query}&apikey=${apiKey}`;
+    const response = await fetch(url);
+    const data = await response.json();
 
-      setOptions(
-        data.items.map((item: any) => ({
-          value: item.address.label,
-          label: item.address.label,
-          lat: item.position.lat,
-          lng: item.position.lng,
-        })),
-      );
-    }, 300), // 300ms debounce delay
-    [apiKey],
-  );
+    setOptions(
+      data.items.map((item: any) => ({
+        value: item.address.label,
+        label: item.address.label,
+        lat: item.position.lat,
+        lng: item.position.lng,
+      })),
+    );
+  };
+
+  const debouncedFetchCitySuggestions = debounce(fetchCitySuggestions, 300);
 
   const onSearch = (searchText: string) => {
-    fetchCitySuggestions(searchText);
+    debouncedFetchCitySuggestions(searchText);
   };
 
   const onSelectCity = (value: string, option: any) => {

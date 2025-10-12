@@ -18,6 +18,13 @@ export class TrimbleRoutingService {
     this.initializeSDK();
   }
 
+  /**
+   * Generate a unique waypoint ID
+   */
+  private generateUniqueId(prefix: string = 'waypoint'): string {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
   private initializeSDK() {
     if (!this.initialized) {
       TrimbleMaps.setAPIKey(this.apiKey);
@@ -277,7 +284,7 @@ export class TrimbleRoutingService {
     index: number,
   ): Waypoint {
     return {
-      id: `waypoint-${index}`,
+      id: this.generateUniqueId('waypoint'),
       lat: lngLat.lat,
       lng: lngLat.lng,
       address: `Stop ${index + 1}`,
@@ -295,7 +302,7 @@ export class TrimbleRoutingService {
 
     // Convert back to Waypoint format
     const simpleWaypoints: Waypoint[] = waypoints.map((wp, index) => ({
-      id: `waypoint-${index}`,
+      id: this.generateUniqueId('waypoint'),
       lat: wp.lat,
       lng: wp.lng,
       address: `Waypoint ${index + 1}`,
@@ -452,7 +459,7 @@ export class TrimbleRoutingService {
       }
 
       return data.Locations.map((location: any, index: number) => ({
-        id: `search-${index}`,
+        id: this.generateUniqueId('search'),
         lat: parseFloat(location.Coords?.Lat || '0'),
         lng: parseFloat(location.Coords?.Lon || '0'),
         address:
