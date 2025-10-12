@@ -5,6 +5,7 @@ import { CloseOutlined } from '@ant-design/icons';
 import TruckInformation from './TruckInformation';
 import TripWaypoints from './TripWaypoints';
 import HereMap from './HereMap';
+import { useMap } from '../context/MapContext';
 
 interface ElementState {
   id: string;
@@ -20,6 +21,7 @@ interface ElementState {
 const CanvasDashboard: React.FC = () => {
   const [elements, setElements] = useState<ElementState[]>([]);
   const [maxZIndex, setMaxZIndex] = useState<number>(0);
+  const { isMapVisible, activeWaypoints } = useMap();
 
   useEffect(() => {
     const savedElements = localStorage.getItem('canvas-elements');
@@ -46,16 +48,6 @@ const CanvasDashboard: React.FC = () => {
       el.id === id ? { ...el, x: data.x, y: data.y } : el,
     );
     setElements(updatedElements);
-    localStorage.setItem('canvas-elements', JSON.stringify(updatedElements));
-  };
-
-  const handleClick = (id: string) => {
-    const newMaxZIndex = maxZIndex + 1;
-    const updatedElements = elements.map((el) =>
-      el.id === id ? { ...el, zIndex: newMaxZIndex } : el,
-    );
-    setElements(updatedElements);
-    setMaxZIndex(newMaxZIndex);
     localStorage.setItem('canvas-elements', JSON.stringify(updatedElements));
   };
 
@@ -118,83 +110,78 @@ const CanvasDashboard: React.FC = () => {
   };
 
   return (
-    <div
-      id="canvas-dashboard"
-      style={{
-        width: '100%',
-        height: '100vh',
-        border: '1px solid #ccc',
-        position: 'relative',
-      }}
-    >
-      <Button
-        type="primary"
-        onClick={addElement}
-        style={{ position: 'absolute', top: 10, left: 10 }}
-      >
-        Add Element
-      </Button>
-      {elements.map((el) => (
-        <Draggable
-          key={el.id}
-          defaultPosition={{ x: el.x, y: el.y }}
-          onStop={(e, data) => handleStop(e, data, el.id)}
-          handle=".card-header"
+    <div id="canvas-dashboard" style={{ display: 'flex' }}>
+      <div style={{ flex: 1, position: 'relative' }}>
+        <Button
+          type="primary"
+          onClick={addElement}
+          style={{ position: 'absolute', top: 10, left: 10 }}
         >
-          <div
-            style={{ position: 'absolute', zIndex: el.zIndex }}
-            onClick={() => handleClick(el.id)}
+          Add Element
+        </Button>
+        {elements.map((el) => (
+          <Draggable
+            key={el.id}
+            defaultPosition={{ x: el.x, y: el.y }}
+            onStop={(e, data) => handleStop(e, data, el.id)}
+            handle=".card-header"
           >
-            <Card
-              style={{ width: 800 }}
-              title={
-                <div
-                  className="card-header"
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <span>Draggable Card</span>
-                  <CloseOutlined
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteElement(el.id);
+            <div style={{ position: 'absolute', zIndex: el.zIndex }}>
+              <Card
+                title={
+                  <div
+                    className="card-header"
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      cursor: 'move',
+                      userSelect: 'none',
                     }}
-                  />
-                </div>
-              }
-              bordered={true}
-            >
-              <Row gutter={16}>
-                <Col span={12}>
-                  <TruckInformation
-                    driverName={el.driverName}
-                    onDriverNameChange={(value) =>
-                      handleDriverNameChange(el.id, value)
-                    }
-                  />
-                  <TripWaypoints
-                    key={`waypoints-${el.id}-${el.points.length}`}
-                    waypoints={el.points}
-                    onPointsChange={(points) =>
-                      handlePointsChange(el.id, points)
-                    }
-                  />
-                </Col>
-                <Col span={12}>
-                  <HereMap
-                    key={`map-${el.id}-${el.points.length}`}
-                    apiKey="YOUR_HERE_MAPS_API_KEY"
-                    points={el.points}
-                  />
-                </Col>
-              </Row>
-            </Card>
-          </div>
-        </Draggable>
-      ))}
+                  >
+                    <span>Draggable Card</span>
+                    <CloseOutlined
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteElement(el.id);
+                      }}
+                    />
+                  </div>
+                }
+                bordered={true}
+                style={{ width: 400 }}
+              >
+                <Row>
+                  <Col span={24}>
+                    <TruckInformation
+                      driverName={el.driverName}
+                      onDriverNameChange={(value) =>
+                        handleDriverNameChange(el.id, value)
+                      }
+                    />
+                    <TripWaypoints
+                      key={`waypoints-${el.id}-${el.points.length}`}
+                      driverId={el.id}
+                      waypoints={el.points}
+                      onPointsChange={(points) =>
+                        handlePointsChange(el.id, points)
+                      }
+                    />
+                  </Col>
+                </Row>
+              </Card>
+            </div>
+          </Draggable>
+        ))}
+      </div>
+      <div style={{ width: '50%', height: '100vh' }}>
+        {isMapVisible && (
+          <HereMap
+            apiKey="TIAGlD6jic7l9Aa8Of8IFxo3EUemmcZlHm_agfAm6Ew"
+            points={activeWaypoints}
+          />
+        )}
+      </div>
     </div>
   );
 };
