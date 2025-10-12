@@ -1,14 +1,14 @@
-{
-  "type": "Feature",
-  "geometry": {
-    "type": "MultiLineString",
-    "coordinates": [
+let _res = {
+  type: 'Feature',
+  geometry: {
+    type: 'MultiLineString',
+    coordinates: [
       [
         [-90.05559, 35.131444],
         [-90.056321, 35.131453],
         // lots of other coordinates
         [-87.651389, 41.874351],
-        [-87.65139, 41.874372]
+        [-87.65139, 41.874372],
       ],
       [
         [-87.65139, 41.874372],
@@ -16,17 +16,17 @@
         // lots of other coordinates removed for brevity
 
         [-71.05457, 42.348848],
-        [-71.055259, 42.349105]
+        [-71.055259, 42.349105],
       ],
       [
         [-71.055259, 42.349105],
         [-71.05457, 42.348848],
         // lots of other coordinates removed for brevity
-        [-77.59674, 43.159481]
-      ]
-    ]
+        [-77.59674, 43.159481],
+      ],
+    ],
   },
-  "TMinutes": 2231,
-  "TDistance": 1914.065,
-  "properties": null
-}
+  TMinutes: 2231,
+  TDistance: 1914.065,
+  properties: null,
+};
