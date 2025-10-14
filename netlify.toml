@@ -1,0 +1,41 @@
+[build]
+  # Directory to publish (build output)
+  publish = "build"
+  
+  # Build command
+  command = "npm run build"
+
+[build.environment]
+  # Node version
+  NODE_VERSION = "18"
+  
+  # Skip npm CI for faster builds (optional)
+  NPM_FLAGS = "--production=false"
+
+# Redirect all routes to index.html for React Router
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security headers for better performance and security
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Cache static assets for better performance
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Environment-specific settings
+[context.production.environment]
+  NODE_ENV = "production"
+  
+[context.deploy-preview.environment]
+  NODE_ENV = "development"
