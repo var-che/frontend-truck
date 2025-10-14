@@ -89,7 +89,6 @@ function decodeChar(char: string): number {
 }
 
 function decodeUnsignedValues(encoded: string): bigint[] | number[] {
-  const isBigInt = typeof BigInt !== 'undefined';
   let result = Num(0);
   let shift = Num(0);
   const resList: number[] = [];

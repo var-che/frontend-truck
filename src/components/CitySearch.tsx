@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { AutoComplete, Input, Spin } from 'antd';
+import { AutoComplete, Input } from 'antd';
 import { debounce } from 'lodash';
 
 const { Search } = Input;
@@ -75,7 +75,7 @@ const CitySearch: React.FC<CitySearchProps> = ({
         setLoading(false);
       }
     }, 1500),
-    [],
+    [setOptions, setLoading],
   );
 
   // Effect to cleanup debounced function on unmount

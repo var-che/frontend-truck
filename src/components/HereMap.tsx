@@ -11,7 +11,6 @@ const HereMap = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [routePolyline, setRoutePolyline] = useState<number[][] | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [routePoints, setRoutePoints] = useState<
     { lat: number; lng: number }[]
   >([]);
@@ -89,10 +88,8 @@ const HereMap = ({
   useEffect(() => {
     async function updateRoute() {
       if (points.length >= 2) {
-        setIsLoading(true);
         const polyline = await calculateRoute(points);
         setRoutePolyline(polyline);
-        setIsLoading(false);
       }
     }
     updateRoute();

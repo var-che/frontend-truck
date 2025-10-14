@@ -4,7 +4,6 @@ import {
   Route,
   RouteOptions,
   RouteCalculationResult,
-  RouteSegment,
 } from '../../types/routing';
 
 export class TrimbleRoutingService {

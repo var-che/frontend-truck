@@ -1,13 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Button, Card, Space, Tag, Tooltip, Typography } from 'antd';
-import {
-  CheckCircleOutlined,
-  DisconnectOutlined,
-  SyncOutlined,
-} from '@ant-design/icons';
+import React from 'react';
 import { ConnectionStatus } from './connection/ConnectionStatus';
-
-const { Text } = Typography;
 
 interface DatConnectionStatusProps {
   onConnectionChange?: (isConnected: boolean) => void;
