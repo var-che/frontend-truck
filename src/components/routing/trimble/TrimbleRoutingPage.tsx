@@ -242,14 +242,16 @@ const TrimbleRoutingPage: React.FC = () => {
     let newX = dragState.initialElementX + deltaX;
     let newY = dragState.initialElementY + deltaY;
 
-    // Constrain to full canvas area (with some padding)
+    // Allow more flexible dragging - elements can be partially off-screen
     const cardWidth = 400; // Card width from TrimbleRoutingElement
     const cardHeight = 300; // Approximate card height
     const canvasWidth = window.innerWidth;
     const canvasHeight = window.innerHeight - 60; // Account for toolbar height
-
-    newX = Math.max(10, Math.min(newX, canvasWidth - cardWidth - 10));
-    newY = Math.max(10, Math.min(newY, canvasHeight - cardHeight - 10));
+    
+    // Allow elements to be dragged mostly off-screen (keep at least 50px visible)
+    const minVisibleArea = 50;
+    newX = Math.max(-cardWidth + minVisibleArea, Math.min(newX, canvasWidth - minVisibleArea));
+    newY = Math.max(-cardHeight + minVisibleArea, Math.min(newY, canvasHeight - minVisibleArea));
 
     updateElement(dragState.elementId, { x: newX, y: newY });
   };
