@@ -322,7 +322,7 @@ const LoadsContainer: React.FC<LoadsContainerProps> = ({
       render: (_: any, record: any) => (
         <div style={{ fontSize: '10px' }}>
           <div>Weight: {record.weight || 'N/A'}</div>
-          <div>Type: {record.fullPartial || 'N/A'}</div>
+          <div>Pieces: {record.pieces || 'N/A'}</div>
           <div>Source: {record.source || 'N/A'}</div>
         </div>
       ),

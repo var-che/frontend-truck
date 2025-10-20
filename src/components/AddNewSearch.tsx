@@ -3,7 +3,7 @@ import { Modal, Space, Row, Col } from 'antd';
 import { useSearchState } from '../hooks/useSearchState';
 import { useSearchSubmission } from '../hooks/useSearchSubmission';
 import { LoadBoardProvider } from '../types/loadboard';
-import CitySelection from './CitySelection';
+import CitySelection from './location/CitySelection';
 import StateMapSelector from './StateMapSelector';
 import DateRangePicker from './DateRangePicker';
 import LoadBoardResults from './LoadBoardResults';

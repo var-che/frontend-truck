@@ -3,7 +3,7 @@ import { Modal, Row, Col, Space, Button, message } from 'antd';
 import { SaveOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { Lane } from './types';
-import CitySelection from '../CitySelection';
+import CitySelection from '../location/CitySelection';
 import StateMapSelector from '../StateMapSelector';
 import DateRangePicker from '../DateRangePicker';
 import { CityData } from '../../hooks/useSearchState';

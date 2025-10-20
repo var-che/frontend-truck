@@ -10,7 +10,7 @@ import { fetchGreeting } from './api';
 import { MapProvider } from './context/MapContext';
 import { SearchResultsProvider } from './context/SearchResultsContext';
 import { TrimbleRoutingProvider } from './context/routing/TrimbleRoutingContext';
-import LoadContainerListing from './components/LoadContainerListing';
+import LoadSearchPage from './components/routing/load-search/LoadSearchPage';
 import DriversPage from './components/DriversPage';
 import SylectusSearchPage from './components/SylectusSearchPage';
 import DatTestPage from './components/DatTestPage';
@@ -72,7 +72,7 @@ const App: React.FC = () => {
                       }
                     />
                     <Route path="/lanes" element={<LanesContainerList />} />
-                    <Route path="/test" element={<LoadContainerListing />} />
+                    <Route path="/load-search" element={<LoadSearchPage />} />
                     <Route path="/boards" element={<BoardsInitialization />} />
                     <Route path="/drivers" element={<DriversPage />} />
                     <Route path="/sylectus" element={<SylectusSearchPage />} />
@@ -113,7 +113,7 @@ const AppHeader: React.FC = () => {
       <Button type="primary" onClick={() => navigate('/dashboard')}>
         Dashboard
       </Button>
-      <Button onClick={() => navigate('/test')}>Loads</Button>
+      <Button onClick={() => navigate('/load-search')}>Load Search</Button>
       <Button onClick={() => navigate('/drivers')}>Drivers</Button>
       <Button onClick={() => navigate('/sylectus')}>Sylectus</Button>
       <Button onClick={() => navigate('/dat-test-page')}>DAT Test</Button>
