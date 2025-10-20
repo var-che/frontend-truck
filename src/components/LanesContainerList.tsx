@@ -26,7 +26,6 @@ const LanesContainerList: React.FC = () => {
     latestSylectusResult,
     addSylectusResult,
     deleteResultBySearchModuleId,
-    deleteSylectusResult,
     datResults,
     sylectusResults,
   } = useSearchResults();
@@ -236,19 +235,25 @@ const LanesContainerList: React.FC = () => {
         const actualTotalRecords =
           response.totalRecords > 0 ? response.totalRecords : loads.length;
 
-        // Always create a new search module ID for refreshes to ensure old results are replaced
-        const newSearchModuleId = `sylectus_refresh_${Date.now()}_${Math.random()
-          .toString(36)
-          .substr(2, 9)}`;
+        // Reuse existing searchModuleId for refreshes to update the same result (prevents duplicate lanes)
+        // Only create a new ID if the lane doesn't have one yet
+        // Use sylectusSearchModuleId (frontend search ID) not sylectusQueryId (backend query ID)
+        const searchModuleId =
+          lane.sylectusSearchModuleId ||
+          lane.sylectusQueryId ||
+          `sylectus_refresh_${Date.now()}_${Math.random()
+            .toString(36)
+            .substr(2, 9)}`;
 
-        // If the lane has an existing sylectusQueryId, we should remove those old results first
-        if (lane.sylectusQueryId) {
-          console.log(
-            '🧹 Removing old Sylectus results for lane:',
-            lane.sylectusQueryId,
-          );
-          deleteSylectusResult(lane.sylectusQueryId);
-        }
+        console.log(
+          '🔄 Using searchModuleId for refresh:',
+          searchModuleId,
+          lane.sylectusSearchModuleId
+            ? '(reusing sylectusSearchModuleId)'
+            : lane.sylectusQueryId
+            ? '(reusing sylectusQueryId)'
+            : '(creating new)',
+        );
 
         // Create a LoadBoardSearchResult from the response
         const searchResult = {
@@ -256,17 +261,27 @@ const LanesContainerList: React.FC = () => {
           message: `Found ${actualTotalRecords} loads for lane refresh`,
           data: {
             provider: 'SYLECTUS',
-            searchModuleId: newSearchModuleId,
+            searchModuleId: searchModuleId,
             timestamp: new Date().toISOString(),
             loads: loads,
             totalRecords: actualTotalRecords,
+            // Preserve original search data to maintain lane identity (including ZIP codes)
+            originalSearchData: {
+              origin: lane.origin, // Preserve full origin object with ZIP
+              destination: lane.destination || null, // Preserve full destination object
+              startDate: lane.dateRange[0],
+              endDate: lane.dateRange[1] || lane.dateRange[0],
+              originStates: [],
+              destinationStates: [],
+              searchModuleId: searchModuleId,
+            },
             searchData: {
               origin: `${lane.origin.city}, ${lane.origin.state}`,
               destination:
                 lane.destination?.city && lane.destination?.state
                   ? `${lane.destination.city}, ${lane.destination.state}`
                   : '',
-              searchModuleId: newSearchModuleId,
+              searchModuleId: searchModuleId,
             },
           },
         };
@@ -281,7 +296,7 @@ const LanesContainerList: React.FC = () => {
           ...lane,
           lastRefreshed: new Date().toISOString(),
           resultsCount: actualTotalRecords,
-          sylectusQueryId: newSearchModuleId, // Use the search module ID
+          sylectusQueryId: searchModuleId, // Use the search module ID
         };
 
         // Update lanes state
