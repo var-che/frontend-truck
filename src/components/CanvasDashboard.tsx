@@ -174,7 +174,7 @@ const CanvasDashboard: React.FC = () => {
           </Draggable>
         ))}
       </div>
-      <div style={{ width: '50%', height: '100vh' }}>
+      <div style={{ width: '51%', height: '100vh' }}>
         {isMapVisible && (
           <HereMap
             apiKey="tKHFcIMhSnMSuZaHJZRV2oi8d_qWa12WEgLU1k8595U"
