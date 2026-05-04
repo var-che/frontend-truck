@@ -6,6 +6,7 @@ export interface SylectusSearchParams {
   toState?: string;
   miles?: number;
   fromDate?: string;
+  toDate?: string;
   loadTypes?: string[];
   maxWeight?: string;
   minCargo?: string;

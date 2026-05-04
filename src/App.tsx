@@ -12,7 +12,7 @@ import { SearchResultsProvider } from './context/SearchResultsContext';
 import { TrimbleRoutingProvider } from './context/routing/TrimbleRoutingContext';
 import LoadSearchPage from './components/routing/load-search/LoadSearchPage';
 import DriversPage from './components/DriversPage';
-import SylectusSearchPage from './components/SylectusSearchPage';
+import SylectusPage from './components/SylectusPage';
 import DatTestPage from './components/DatTestPage';
 import TrimbleRoutingPage from './components/routing/trimble/TrimbleRoutingPage';
 import { DATLoadsHandler } from './components/DATLoadsHandler';
@@ -75,7 +75,7 @@ const App: React.FC = () => {
                     <Route path="/load-search" element={<LoadSearchPage />} />
                     <Route path="/boards" element={<BoardsInitialization />} />
                     <Route path="/drivers" element={<DriversPage />} />
-                    <Route path="/sylectus" element={<SylectusSearchPage />} />
+                    <Route path="/sylectus" element={<SylectusPage />} />
                     <Route path="/dat-test-page" element={<DatTestPage />} />
                     <Route
                       path="/trimble-routing"

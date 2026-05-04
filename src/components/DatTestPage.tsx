@@ -220,6 +220,7 @@ const DatTestPage: React.FC<DatTestPageProps> = () => {
         fromZip: zipCode,
         fromCity: firstCity.city,
         fromState: firstCity.state,
+        placeId: firstCity.id,
         equipmentType: 'VAN',
         loadDate: currentDate, // Dynamic date!
         maxLength: 26,

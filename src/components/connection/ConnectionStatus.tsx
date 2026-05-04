@@ -6,6 +6,8 @@ export const ConnectionStatus = () => {
     extensionConnected,
     datTabConnected,
     datTabId,
+    sylectusTabConnected,
+    sylectusTabId,
     pongMessage,
     pingDatTab,
   } = useChromeMessaging();
@@ -22,6 +24,12 @@ export const ConnectionStatus = () => {
       <div>
         <input type="checkbox" checked={datTabConnected} readOnly />
         <label>Connected to DAT tab {datTabId && `(ID: ${datTabId})`}</label>
+      </div>
+      <div>
+        <input type="checkbox" checked={sylectusTabConnected} readOnly />
+        <label>
+          Connected to Sylectus tab {sylectusTabId && `(ID: ${sylectusTabId})`}
+        </label>
       </div>
       <button
         onClick={pingDatTab}

@@ -203,6 +203,7 @@ export class DATService implements LoadBoardService {
         fromZip: zipCode,
         fromCity: firstCity.city,
         fromState: firstCity.state,
+        placeId: firstCity.id,
         longitude: firstCity.longitude,
         latitude: firstCity.latitude,
         equipmentType: 'VAN',

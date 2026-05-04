@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { EXTENSION_ID as DEFAULT_EXTENSION_ID } from '../utils/constants';
 
-const EXTENSION_ID = 'pgdncppejlbjbpbifphhmjiebjdpgehi';
+const EXTENSION_ID =
+  process.env.REACT_APP_EXTENSION_ID || DEFAULT_EXTENSION_ID;
 
 interface DATLoadsMessage {
   type: 'DAT_LOADS_RECEIVED';
@@ -32,6 +34,8 @@ export const useChromeMessaging = () => {
   const [extensionConnected, setExtensionConnected] = useState(false);
   const [datTabConnected, setDatTabConnected] = useState(false);
   const [datTabId, setDatTabId] = useState<number | null>(null);
+  const [sylectusTabConnected, setSylectusTabConnected] = useState(false);
+  const [sylectusTabId, setSylectusTabId] = useState<number | null>(null);
   const [pongMessage, setPongMessage] = useState('');
   const [checkingConnection, setCheckingConnection] = useState(false);
   const onDATLoadsReceivedRef = useRef<
@@ -121,6 +125,7 @@ export const useChromeMessaging = () => {
   // Check if extension is available
   const checkExtensionAvailability = useCallback(async () => {
     setCheckingConnection(true);
+    console.log('[useChromeMessaging] Checking extension availability. Using ID:', EXTENSION_ID);
     try {
       // First try postMessage to check if extension is injected
       window.postMessage(
@@ -150,10 +155,19 @@ export const useChromeMessaging = () => {
         setDatTabConnected(false);
         setDatTabId(null);
       }
+
+      if (response?.sylectusTabConnected) {
+        setSylectusTabConnected(true);
+        setSylectusTabId(response.sylectusTabId || null);
+      } else {
+        setSylectusTabConnected(false);
+        setSylectusTabId(null);
+      }
     } catch (error) {
       console.error('Extension connection error:', error);
       setExtensionConnected(false);
       setDatTabConnected(false);
+      setSylectusTabConnected(false);
     } finally {
       setCheckingConnection(false);
     }
@@ -184,6 +198,12 @@ export const useChromeMessaging = () => {
       ) {
         setDatTabConnected(false);
         setDatTabId(null);
+      } else if (message.type === 'SYL_TAB_CONNECTED') {
+        setSylectusTabConnected(true);
+        setSylectusTabId(message.tabId);
+      } else if (message.type === 'SYL_TAB_DISCONNECTED') {
+        setSylectusTabConnected(false);
+        setSylectusTabId(null);
       } else if (message.type === 'EXTENSION_DETECTED') {
         setExtensionConnected(true);
       } else if (message.type === 'DAT_LOADS_RECEIVED') {
@@ -297,6 +317,8 @@ export const useChromeMessaging = () => {
     extensionConnected,
     datTabConnected,
     datTabId,
+    sylectusTabConnected,
+    sylectusTabId,
     pongMessage,
     pingDatTab,
     checkExtensionAvailability,

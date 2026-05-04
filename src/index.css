@@ -11,3 +11,16 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Sylectus new load highlight */
+.sylectus-new-row td {
+  background-color: #f6ffed !important;
+  animation: sylectus-flash 1.5s ease-in-out;
+}
+
+@keyframes sylectus-flash {
+  0%   { background-color: #d9f7be; }
+  50%  { background-color: #f6ffed; }
+  100% { background-color: #f6ffed; }
+}
+
