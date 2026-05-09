@@ -66,6 +66,9 @@ export interface SylectusLoad {
   saferUrl?: string;
   bidUrl?: string;
   reviewData?: string;
+  mabcode?: string;
+  postedby?: string;
+  pronumuk?: string;
 }
 
 export interface SylectusSearchResponse {

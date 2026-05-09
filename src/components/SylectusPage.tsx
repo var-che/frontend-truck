@@ -1,4 +1,4 @@
-﻿import React, { useState, useCallback } from 'react';
+﻿import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   Button,
   Space,
@@ -29,9 +29,79 @@ import { useSylectusLanes } from '../hooks/useSylectusLanes';
 import { SylectusLaneCard } from './sylectus/SylectusLaneCard';
 import { SylectusLoad } from '../types/sylectus';
 import ExtensionConnectionStatus from './ExtensionConnectionStatus';
+import {
+  GeocodingService,
+  GeocodingProviderType,
+} from '../services/geocoding';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
+
+// Module-level geocode cache (persists across renders and lane switches)
+const geoCache = new Map<string, { lat: number; lng: number } | null>();
+
+function haversineDeadhead(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3959;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+/** Shows computed deadhead miles from lane origin to load pickup on hover. */
+const DhOCell: React.FC<{ loadOrigin: string; laneOriginQuery: string }> = ({
+  loadOrigin,
+  laneOriginQuery,
+}) => {
+  const [dh, setDh] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const hasTriedRef = useRef(false);
+
+  useEffect(() => {
+    hasTriedRef.current = false;
+    setDh(null);
+    setLoading(false);
+  }, [laneOriginQuery]);
+
+  const handleHover = useCallback(async () => {
+    if (hasTriedRef.current || !laneOriginQuery || !loadOrigin) return;
+    hasTriedRef.current = true;
+    setLoading(true);
+    try {
+      const provider = GeocodingService.getProvider(GeocodingProviderType.TRIMBLE_MAPS);
+      const geocode = async (q: string) => {
+        if (geoCache.has(q)) return geoCache.get(q)!;
+        const r = await provider.geocodeAddress(q);
+        const coords = r && r.lat != null && r.lng != null ? { lat: r.lat, lng: r.lng } : null;
+        geoCache.set(q, coords);
+        return coords;
+      };
+      const [from, to] = await Promise.all([geocode(laneOriginQuery), geocode(loadOrigin)]);
+      if (from && to) setDh(haversineDeadhead(from.lat, from.lng, to.lat, to.lng));
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [laneOriginQuery, loadOrigin]);
+
+  const color = dh === null ? undefined : dh < 50 ? '#52c41a' : dh < 150 ? '#1677ff' : '#ff4d4f';
+  return (
+    <div onMouseEnter={handleHover} style={{ minWidth: 46, textAlign: 'center', cursor: 'default' }}>
+      {loading ? (
+        <Spin size="small" />
+      ) : dh !== null ? (
+        <Text style={{ fontSize: 11, color }}>{dh}mi</Text>
+      ) : (
+        <Text type="secondary" style={{ fontSize: 11 }}>—</Text>
+      )}
+    </div>
+  );
+};
 
 const REFRESH_OPTIONS = [
   { label: '15s', value: 15 },
@@ -58,11 +128,16 @@ const LOAD_COLUMNS: ColumnsType<SylectusLoad> = [
     title: 'Origin',
     dataIndex: 'origin',
     key: 'origin',
-    width: 140,
+    width: 160,
     render: (val: string, row: SylectusLoad) => (
       <div>
         <Text style={{ fontSize: 12 }}>{val || '—'}</Text>
         {row.dhO && <div style={{ fontSize: 10, color: '#888' }}>DH: {row.dhO}</div>}
+        {row.notes && (
+          <div style={{ fontSize: 10, color: '#888', fontStyle: 'italic', marginTop: 2, maxWidth: 200, whiteSpace: 'normal', lineHeight: '14px' }}>
+            {row.notes}
+          </div>
+        )}
       </div>
     ),
   },
@@ -153,6 +228,29 @@ const SylectusPage: React.FC = () => {
   const [refreshInterval, setRefreshInterval] = useState(15);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [activeLaneId, setActiveLaneId] = useState<string | null>(null);
+  const [brokerDetails, setBrokerDetails] = useState<Record<string, Record<string, string>>>({});
+  const [brokerLoading, setBrokerLoading] = useState<Record<string, boolean>>({});
+
+  const fetchBrokerDetails = useCallback(async (record: SylectusLoad) => {
+    if (!record.pronumuk || !record.mabcode || !record.postedby) return;
+    if (brokerDetails[record.id] || brokerLoading[record.id]) return;
+    setBrokerLoading((prev) => ({ ...prev, [record.id]: true }));
+    try {
+      const resp = await sendMessageToExtension({
+        type: 'SYLECTUS_GET_BROKER_DETAILS',
+        pronumuk: record.pronumuk,
+        mabcode: record.mabcode,
+        postedby: record.postedby,
+      });
+      if (resp?.success && resp.details) {
+        setBrokerDetails((prev) => ({ ...prev, [record.id]: resp.details }));
+      }
+    } catch {
+      // silently fail — expanded row just won't show broker section
+    } finally {
+      setBrokerLoading((prev) => ({ ...prev, [record.id]: false }));
+    }
+  }, [sendMessageToExtension, brokerDetails, brokerLoading]);
 
   const {
     lanes,
@@ -175,6 +273,27 @@ const SylectusPage: React.FC = () => {
 
   const activeLane = lanes.find((l) => l.id === resolvedActiveId) ?? null;
 
+  // Build the DH-O column query from the active lane's origin city
+  const laneOriginQuery = activeLane?.searchParams.fromCity
+    ? `${activeLane.searchParams.fromCity}, ${activeLane.searchParams.fromState}`
+    : '';
+
+  // Add DH-O column after Origin (index 1)
+  const tableColumns = useMemo((): ColumnsType<SylectusLoad> => {
+    const dhOCol: ColumnsType<SylectusLoad>[0] = {
+      title: 'DH-O',
+      key: 'dhO',
+      width: 58,
+      align: 'center' as const,
+      render: (_: any, row: SylectusLoad) => (
+        <DhOCell loadOrigin={row.origin} laneOriginQuery={laneOriginQuery} />
+      ),
+    };
+    const cols = [...LOAD_COLUMNS];
+    cols.splice(2, 0, dhOCol); // insert between Origin and Destination
+    return cols;
+  }, [laneOriginQuery]);
+
   const handleActivate = useCallback((id: string) => {
     setActiveLaneId(id);
     clearNewBadge(id);
@@ -184,7 +303,7 @@ const SylectusPage: React.FC = () => {
 
   const handleRefreshAll = () => {
     lanes.forEach((l) => {
-      if (l.searchParams.fromCity && l.searchParams.fromState) searchLane(l.id);
+      if (l.searchParams.fromState) searchLane(l.id);
     });
   };
 
@@ -284,7 +403,7 @@ const SylectusPage: React.FC = () => {
               size="small"
               icon={<ReloadOutlined spin={activeLane.isLoading} />}
               onClick={() => searchLane(activeLane.id)}
-              disabled={!activeLane.searchParams.fromCity || activeLane.isLoading}
+              disabled={!activeLane.searchParams.fromState || activeLane.isLoading}
             >
               Refresh
             </Button>
@@ -303,7 +422,7 @@ const SylectusPage: React.FC = () => {
           </div>
         ) : (
           <Table<SylectusLoad>
-            columns={LOAD_COLUMNS}
+            columns={tableColumns}
             dataSource={activeLane?.loads ?? []}
             rowKey="id"
             size="small"
@@ -313,72 +432,118 @@ const SylectusPage: React.FC = () => {
               activeLane?.newLoadIds.has(row.id) ? 'sylectus-new-row' : ''
             }
             expandable={{
-              expandedRowRender: (record) => (
-                <div style={{ padding: '8px 16px', background: '#fafafa', borderRadius: 4 }}>
-                  <Row gutter={[16, 8]}>
-                    {record.notes && (
-                      <Col xs={24} md={12}>
-                        <Text strong>Notes: </Text><Text>{record.notes}</Text>
-                      </Col>
-                    )}
-                    {record.otherInfo && (
-                      <Col xs={24} md={12}>
-                        <Text strong>Other info: </Text><Text>{record.otherInfo}</Text>
-                      </Col>
-                    )}
-                    {record.pickupLocation?.fullAddress && (
-                      <Col xs={24} md={12}>
-                        <Text strong>Pickup: </Text><Text>{record.pickupLocation.fullAddress}</Text>
-                      </Col>
-                    )}
-                    {record.deliveryLocation?.fullAddress && (
-                      <Col xs={24} md={12}>
-                        <Text strong>Delivery: </Text><Text>{record.deliveryLocation.fullAddress}</Text>
-                      </Col>
-                    )}
-                    {record.refNo && (
-                      <Col xs={12} md={6}>
-                        <Text strong>Ref#: </Text><Text>{record.refNo}</Text>
-                      </Col>
-                    )}
-                    {record.orderNo && (
-                      <Col xs={12} md={6}>
-                        <Text strong>Order#: </Text><Text>{record.orderNo}</Text>
-                      </Col>
-                    )}
-                    {record.brokerMC && (
-                      <Col xs={12} md={6}>
-                        <Text strong>MC#: </Text><Text>{record.brokerMC}</Text>
-                      </Col>
-                    )}
-                    {record.capacity && (
-                      <Col xs={12} md={6}>
-                        <Text strong>Capacity: </Text><Text>{record.capacity}</Text>
-                      </Col>
-                    )}
-                    {record.daysToPayCredit && (
-                      <Col xs={12} md={6}>
-                        <Text strong>Pay: </Text>
-                        <Text>{record.daysToPayCredit.days != null ? `${record.daysToPayCredit.days} days` : '—'}
-                          {record.daysToPayCredit.score ? ` (${record.daysToPayCredit.score})` : ''}
-                        </Text>
-                      </Col>
-                    )}
-                    {record.saferUrl && (
-                      <Col xs={24}>
-                        <a href={record.saferUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
-                          SAFER report
-                        </a>
-                      </Col>
-                    )}
-                  </Row>
-                </div>
-              ),
+              expandedRowRender: (record) => {
+                const bd = brokerDetails[record.id];
+                const bdLoading = brokerLoading[record.id];
+                return (
+                  <div style={{ padding: '8px 16px', background: '#fafafa', borderRadius: 4 }}>
+                    <Row gutter={[16, 8]}>
+                      {record.notes && (
+                        <Col xs={24}>
+                          <Text strong>Notes: </Text><Text>{record.notes}</Text>
+                        </Col>
+                      )}
+                      {record.pickupLocation?.fullAddress && (
+                        <Col xs={24} md={12}>
+                          <Text strong>Pickup: </Text><Text>{record.pickupLocation.fullAddress}</Text>
+                        </Col>
+                      )}
+                      {record.deliveryLocation?.fullAddress && (
+                        <Col xs={24} md={12}>
+                          <Text strong>Delivery: </Text><Text>{record.deliveryLocation.fullAddress}</Text>
+                        </Col>
+                      )}
+                      {record.refNo && (
+                        <Col xs={12} md={6}>
+                          <Text strong>Ref#: </Text><Text>{record.refNo}</Text>
+                        </Col>
+                      )}
+                      {record.orderNo && (
+                        <Col xs={12} md={6}>
+                          <Text strong>Order#: </Text><Text>{record.orderNo}</Text>
+                        </Col>
+                      )}
+                      {record.daysToPayCredit && (
+                        <Col xs={12} md={6}>
+                          <Text strong>Pay: </Text>
+                          <Text>{record.daysToPayCredit.days != null ? `${record.daysToPayCredit.days} days` : '—'}
+                            {record.daysToPayCredit.score ? ` (${record.daysToPayCredit.score})` : ''}
+                          </Text>
+                        </Col>
+                      )}
+                      {record.saferUrl && (
+                        <Col xs={24}>
+                          <a href={record.saferUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
+                            SAFER report
+                          </a>
+                        </Col>
+                      )}
+
+                      {/* Broker profile details */}
+                      {bdLoading && (
+                        <Col xs={24}>
+                          <Spin size="small" style={{ marginRight: 8 }} />
+                          <Text type="secondary" style={{ fontSize: 11 }}>Loading broker details…</Text>
+                        </Col>
+                      )}
+                      {bd && (
+                        <>
+                          <Col xs={24}>
+                            <Divider style={{ margin: '6px 0' }} />
+                          </Col>
+                          {bd['COMPANY NAME'] && (
+                            <Col xs={24} md={12}>
+                              <Text strong>Company: </Text><Text>{bd['COMPANY NAME']}</Text>
+                            </Col>
+                          )}
+                          {bd['POSTED BY PHONE'] && (
+                            <Col xs={12} md={6}>
+                              <Text strong>Phone: </Text><Text>{bd['POSTED BY PHONE']}</Text>
+                            </Col>
+                          )}
+                          {bd['E-MAIL'] && (
+                            <Col xs={12} md={8}>
+                              <Text strong>Email: </Text>
+                              <a href={`mailto:${bd['E-MAIL']}`} style={{ fontSize: 12 }}>{bd['E-MAIL']}</a>
+                            </Col>
+                          )}
+                          {bd['BROKER MC NUMBER'] && (
+                            <Col xs={12} md={6}>
+                              <Text strong>MC#: </Text><Text>{bd['BROKER MC NUMBER']}</Text>
+                            </Col>
+                          )}
+                          {bd['TRANSCREDIT DAYS TO PAY'] && (
+                            <Col xs={12} md={6}>
+                              <Text strong>Days to pay: </Text><Text>{bd['TRANSCREDIT DAYS TO PAY']}</Text>
+                            </Col>
+                          )}
+                          {bd['TRANSCREDIT CREDIT SCORE'] && (
+                            <Col xs={12} md={6}>
+                              <Text strong>Credit score: </Text><Text>{bd['TRANSCREDIT CREDIT SCORE']}</Text>
+                            </Col>
+                          )}
+                          {bd['NOTES'] && (
+                            <Col xs={24}>
+                              <Text strong>Order notes: </Text><Text>{bd['NOTES']}</Text>
+                            </Col>
+                          )}
+                          {bd['COMPANY ADDRESS'] && (
+                            <Col xs={24} md={12}>
+                              <Text strong>Address: </Text><Text>{bd['COMPANY ADDRESS']}</Text>
+                            </Col>
+                          )}
+                        </>
+                      )}
+                    </Row>
+                  </div>
+                );
+              },
               expandIcon: ({ expanded, onExpand, record }) => (
                 <Tooltip title={expanded ? 'Hide details' : 'Show details'}>
                   <DownOutlined
                     onClick={(e) => {
                       if (!expanded && resolvedActiveId) markLoadSeen(resolvedActiveId, record.id);
+                      if (!expanded) fetchBrokerDetails(record);
                       onExpand(record, e as any);
                     }}
                     style={{

@@ -224,7 +224,7 @@ export function useSylectusLanes(
     intervalsRef.current.clear();
 
     lanes.forEach((lane) => {
-      if (!lane.searchParams.fromCity || !lane.searchParams.fromState) return;
+      if (!lane.searchParams.fromState) return;
 
       const timer = setInterval(() => {
         searchLane(lane.id);

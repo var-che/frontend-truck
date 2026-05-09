@@ -60,13 +60,13 @@ export const SylectusLaneCard: React.FC<Props> = ({
   const [formOpen, setFormOpen] = useState(!lane.lastRefresh);
 
   const [originLoc, setOriginLoc] = useState<LocationResult | null>(
-    lane.searchParams.fromCity
-      ? { displayName: lane.originDisplay, city: lane.searchParams.fromCity, state: lane.searchParams.fromState, postalCode: '' }
+    lane.searchParams.fromState
+      ? { displayName: lane.originDisplay || lane.searchParams.fromCity || lane.searchParams.fromState, city: lane.searchParams.fromCity, state: lane.searchParams.fromState, postalCode: '' }
       : null
   );
   const [destLoc, setDestLoc] = useState<LocationResult | null>(
-    lane.searchParams.toCity
-      ? { displayName: lane.destDisplay, city: lane.searchParams.toCity, state: lane.searchParams.toState || '', postalCode: '' }
+    lane.searchParams.toState
+      ? { displayName: lane.destDisplay || lane.searchParams.toCity || lane.searchParams.toState || '', city: lane.searchParams.toCity || '', state: lane.searchParams.toState || '', postalCode: '' }
       : null
   );
 
@@ -98,13 +98,15 @@ export const SylectusLaneCard: React.FC<Props> = ({
     setEditingLabel(false);
   };
 
-  const hasSearch = !!(lane.searchParams.fromCity && lane.searchParams.fromState);
+  const hasSearch = !!lane.searchParams.fromState;
+  const originLabel = lane.originDisplay || (lane.searchParams.fromCity
+    ? `${lane.searchParams.fromCity}, ${lane.searchParams.fromState}`
+    : lane.searchParams.fromState);
+  const destLabel = lane.destDisplay || (lane.searchParams.toCity
+    ? `${lane.searchParams.toCity}, ${lane.searchParams.toState}`
+    : lane.searchParams.toState || '');
   const routeSummary = hasSearch
-    ? `${lane.originDisplay || `${lane.searchParams.fromCity}, ${lane.searchParams.fromState}`} → ${
-        lane.destDisplay || lane.searchParams.toCity
-          ? lane.destDisplay || `${lane.searchParams.toCity}, ${lane.searchParams.toState}`
-          : 'Open'
-      }`
+    ? `${originLabel} → ${destLabel || 'Open'}`
     : 'No search set';
 
   return (
@@ -119,9 +121,11 @@ export const SylectusLaneCard: React.FC<Props> = ({
         userSelect: 'none',
       }}
       onClick={() => onActivate(lane.id)}
-      onDoubleClick={() => setFormOpen((v) => !v)}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}
+        onDoubleClick={() => setFormOpen((v) => !v)}
+      >
         <div style={{ flex: '0 0 auto' }} onClick={(e) => e.stopPropagation()}>
           {editingLabel ? (
             <Space size={4}>
@@ -185,7 +189,7 @@ export const SylectusLaneCard: React.FC<Props> = ({
               type="text"
               icon={<ReloadOutlined spin={lane.isLoading} />}
               onClick={() => onSearch(lane.id)}
-              disabled={!hasSearch || lane.isLoading}
+              disabled={!hasSearch || lane.isLoading || !originLoc}
             />
           </Tooltip>
           {canRemove && (
