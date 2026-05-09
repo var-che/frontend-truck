@@ -16,6 +16,8 @@ import SylectusPage from './components/SylectusPage';
 import DatTestPage from './components/DatTestPage';
 import TrimbleRoutingPage from './components/routing/trimble/TrimbleRoutingPage';
 import { DATLoadsHandler } from './components/DATLoadsHandler';
+import EmailPage from './components/email/EmailPage';
+import SettingsPage from './components/SettingsPage';
 
 import { App as AntApp, Layout, Button } from 'antd';
 import LanesContainerList from './components/LanesContainerList';
@@ -77,6 +79,8 @@ const App: React.FC = () => {
                     <Route path="/drivers" element={<DriversPage />} />
                     <Route path="/sylectus" element={<SylectusPage />} />
                     <Route path="/dat-test-page" element={<DatTestPage />} />
+                    <Route path="/email" element={<EmailPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
                     <Route
                       path="/trimble-routing"
                       element={<TrimbleRoutingPage />}
@@ -120,7 +124,8 @@ const AppHeader: React.FC = () => {
       <Button onClick={() => navigate('/trimble-routing')}>
         Trimble Routing
       </Button>
-      <Button>Settings</Button>
+      <Button onClick={() => navigate('/email')}>Email</Button>
+      <Button onClick={() => navigate('/settings')}>Settings</Button>
       <Button onClick={() => navigate('/boards')}>Boards connection</Button>
     </Header>
   );

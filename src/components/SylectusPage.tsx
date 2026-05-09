@@ -15,6 +15,7 @@ import {
   Alert,
   Spin,
   Card,
+  Drawer,
 } from 'antd';
 import {
   PlusOutlined,
@@ -22,6 +23,7 @@ import {
   ClockCircleOutlined,
   PhoneOutlined,
   DownOutlined,
+  MailOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useChromeMessaging } from '../hooks/useChromeMessaging';
@@ -29,6 +31,7 @@ import { useSylectusLanes } from '../hooks/useSylectusLanes';
 import { SylectusLaneCard } from './sylectus/SylectusLaneCard';
 import { SylectusLoad } from '../types/sylectus';
 import ExtensionConnectionStatus from './ExtensionConnectionStatus';
+import EmailComposeForm from './email/EmailComposeForm';
 import {
   GeocodingService,
   GeocodingProviderType,
@@ -230,6 +233,32 @@ const SylectusPage: React.FC = () => {
   const [activeLaneId, setActiveLaneId] = useState<string | null>(null);
   const [brokerDetails, setBrokerDetails] = useState<Record<string, Record<string, string>>>({});
   const [brokerLoading, setBrokerLoading] = useState<Record<string, boolean>>({});
+
+  // Email drawer state
+  const [emailLoad, setEmailLoad] = useState<SylectusLoad | null>(null);
+  const [emailTo, setEmailTo] = useState<string>('');
+  const [gmailToken, setGmailToken] = useState<string | null>(null);
+
+  const EXTENSION_ID = process.env.REACT_APP_EXTENSION_ID || 'obifncifgmneplklobmfbmhjahjfbkpa';
+
+  const openEmailDrawer = useCallback(async (record: SylectusLoad, brokerEmail?: string) => {
+    setEmailLoad(record);
+    setEmailTo(brokerEmail || '');
+    // Fetch Gmail token if not already cached
+    if (!gmailToken && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      try {
+        const res: any = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage(EXTENSION_ID, { type: 'GMAIL_GET_TOKEN' }, (r) => {
+            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+            else resolve(r);
+          });
+        });
+        if (res?.success && res?.token) setGmailToken(res.token);
+      } catch {
+        // token fetch failed — compose form will show connect prompt
+      }
+    }
+  }, [gmailToken, EXTENSION_ID]);
 
   const fetchBrokerDetails = useCallback(async (record: SylectusLoad) => {
     if (!record.pronumuk || !record.mabcode || !record.postedby) return;
@@ -532,7 +561,28 @@ const SylectusPage: React.FC = () => {
                               <Text strong>Address: </Text><Text>{bd['COMPANY ADDRESS']}</Text>
                             </Col>
                           )}
+                          <Col xs={24} style={{ marginTop: 6 }}>
+                            <Button
+                              size="small"
+                              icon={<MailOutlined />}
+                              onClick={() => openEmailDrawer(record, bd['E-MAIL'])}
+                            >
+                              Compose Email
+                            </Button>
+                          </Col>
                         </>
+                      )}
+                      {/* Mail button even without broker details */}
+                      {!bd && !bdLoading && (
+                        <Col xs={24} style={{ marginTop: 4 }}>
+                          <Button
+                            size="small"
+                            icon={<MailOutlined />}
+                            onClick={() => openEmailDrawer(record)}
+                          >
+                            Compose Email
+                          </Button>
+                        </Col>
                       )}
                     </Row>
                   </div>
@@ -569,6 +619,26 @@ const SylectusPage: React.FC = () => {
           />
         )}
       </Card>
+
+      {/* Email compose drawer */}
+      <Drawer
+        title={`Compose Email${emailLoad ? ` — ${emailLoad.origin} → ${emailLoad.destination}` : ''}`}
+        placement="right"
+        width={620}
+        open={emailLoad !== null}
+        onClose={() => setEmailLoad(null)}
+        destroyOnClose
+      >
+        {emailLoad && (
+          <EmailComposeForm
+            gmailToken={gmailToken}
+            load={emailLoad}
+            initialTo={emailTo}
+            dispatcherName={localStorage.getItem('dispatcher_settings_v1') || ''}
+            onDone={() => setEmailLoad(null)}
+          />
+        )}
+      </Drawer>
     </div>
   );
 };
