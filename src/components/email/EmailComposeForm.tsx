@@ -36,6 +36,16 @@ interface EmailComposeFormProps {
   dhMiles?: number;
   /** Called when email is sent or user cancels */
   onDone?: () => void;
+  /** Called after a successful send with thread metadata */
+  onSent?: (params: {
+    messageId: string;
+    threadId: string;
+    subject: string;
+    body: string;
+    to: string;
+    from: string;
+    sentAt: string;
+  }) => void;
   /** Gmail OAuth token — obtain from extension before opening */
   gmailToken: string | null;
   /** Dispatcher name from settings */
@@ -58,6 +68,7 @@ const EmailComposeForm: React.FC<EmailComposeFormProps> = ({
   driver,
   dhMiles,
   onDone,
+  onSent,
   gmailToken,
   dispatcherName,
 }) => {
@@ -126,6 +137,17 @@ const EmailComposeForm: React.FC<EmailComposeFormProps> = ({
       }
 
       antdMessage.success("Email sent successfully!");
+      if (data.messageId && onSent) {
+        onSent({
+          messageId: data.messageId,
+          threadId: data.threadId,
+          subject: resolvedSubject,
+          body: resolvedBody,
+          to: to.trim(),
+          from: data.from || "",
+          sentAt: data.sentAt || new Date().toISOString(),
+        });
+      }
       onDone?.();
     } catch (err) {
       console.error("Send error:", err);

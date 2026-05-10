@@ -21,7 +21,9 @@ function buildRfc2822(
   cc: string | undefined,
   subject: string,
   body: string,
-  fromEmail: string
+  fromEmail: string,
+  inReplyTo?: string,
+  references?: string
 ): string {
   const lines = [
     `From: ${fromEmail}`,
@@ -29,6 +31,8 @@ function buildRfc2822(
     ...(cc ? [`Cc: ${cc}`] : []),
     `Subject: ${subject}`,
     "Content-Type: text/plain; charset=UTF-8",
+    ...(inReplyTo ? [`In-Reply-To: <${inReplyTo}>`] : []),
+    ...(references ? [`References: ${references}`] : []),
     "",
     body,
   ];
@@ -50,9 +54,12 @@ export const handler: Handler = async (event) => {
   let subject: string;
   let body: string;
   let cc: string | undefined;
+  let threadId: string | undefined;
+  let inReplyTo: string | undefined;
+  let references: string | undefined;
 
   try {
-    ({ gmailToken, to, subject, body, cc } = JSON.parse(event.body || "{}"));
+    ({ gmailToken, to, subject, body, cc, threadId, inReplyTo, references } = JSON.parse(event.body || "{}"));
   } catch {
     return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: "Invalid JSON" }) };
   }
@@ -87,7 +94,10 @@ export const handler: Handler = async (event) => {
   }
 
   // Step 2 — send via Gmail API using the user's own token
-  const raw = buildRfc2822(to, cc, subject, body, fromEmail);
+  const raw = buildRfc2822(to, cc, subject, body, fromEmail, inReplyTo, references);
+  const sendPayload: Record<string, string> = { raw };
+  if (threadId) sendPayload.threadId = threadId;
+
   const gmailRes = await fetch(
     "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
     {
@@ -96,7 +106,7 @@ export const handler: Handler = async (event) => {
         Authorization: `Bearer ${gmailToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ raw }),
+      body: JSON.stringify(sendPayload),
     }
   );
 
@@ -112,7 +122,10 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  const { id: messageId } = await gmailRes.json();
+  const { id: messageId, threadId: returnedThreadId } = await gmailRes.json();
+
+  // Step 3 — fetch the threadId if not already returned (Gmail send always returns it)
+  const resolvedThreadId: string = returnedThreadId || threadId || messageId;
 
   return {
     statusCode: 200,
@@ -120,6 +133,9 @@ export const handler: Handler = async (event) => {
     body: JSON.stringify({
       success: true,
       messageId,
+      threadId: resolvedThreadId,
+      sentAt: new Date().toISOString(),
+      from: fromEmail,
     }),
   };
 };

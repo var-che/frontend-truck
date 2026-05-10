@@ -35,3 +35,35 @@ export interface UserEmailStatus {
   email: string;
   name: string;
 }
+
+// ── Email Thread Tracking ─────────────────────────────────────────────────────
+
+export type EmailMessageDirection = "sent" | "received";
+
+export interface EmailMessage {
+  messageId: string;
+  gmailThreadId: string;
+  direction: EmailMessageDirection;
+  subject: string;
+  snippet: string;
+  /** Plain-text body (decoded from Gmail payload) */
+  body: string;
+  from: string;
+  to: string;
+  sentAt: string; // ISO string
+}
+
+export interface EmailThread {
+  loadId: string;
+  /** Snapshot of load details at time of first email */
+  loadSnapshot: {
+    origin: string;
+    destination: string;
+    company: string;
+    rate: string;
+  };
+  gmailThreadId: string;
+  messages: EmailMessage[];
+  recipientEmail: string;
+  lastFetchedAt: string; // ISO string
+}

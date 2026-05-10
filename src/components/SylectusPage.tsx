@@ -32,6 +32,9 @@ import { SylectusLaneCard } from './sylectus/SylectusLaneCard';
 import { SylectusLoad } from '../types/sylectus';
 import ExtensionConnectionStatus from './ExtensionConnectionStatus';
 import EmailComposeForm from './email/EmailComposeForm';
+import EmailThreadDrawer from './email/EmailThreadDrawer';
+import { useEmailThreads } from '../hooks/useEmailThreads';
+import { EmailThread } from '../types/email';
 import {
   GeocodingService,
   GeocodingProviderType,
@@ -229,23 +232,46 @@ const LOAD_COLUMNS: ColumnsType<SylectusLoad> = [
 const SylectusPage: React.FC = () => {
   const { sendMessageToExtension, extensionConnected } = useChromeMessaging();
   const [refreshInterval, setRefreshInterval] = useState(15);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const autoRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeLaneId, setActiveLaneId] = useState<string | null>(null);
   const [brokerDetails, setBrokerDetails] = useState<Record<string, Record<string, string>>>({});
   const [brokerLoading, setBrokerLoading] = useState<Record<string, boolean>>({});
 
-  // Email drawer state
+  // Auto-off after 15 minutes
+  const handleAutoRefreshChange = useCallback((checked: boolean) => {
+    setAutoRefresh(checked);
+    if (autoRefreshTimerRef.current) clearTimeout(autoRefreshTimerRef.current);
+    if (checked) {
+      autoRefreshTimerRef.current = setTimeout(() => {
+        setAutoRefresh(false);
+      }, 15 * 60 * 1000); // 15 minutes
+    }
+  }, []);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoRefreshTimerRef.current) clearTimeout(autoRefreshTimerRef.current);
+    };
+  }, []);
+
+  // Email compose drawer state
   const [emailLoad, setEmailLoad] = useState<SylectusLoad | null>(null);
   const [emailTo, setEmailTo] = useState<string>('');
   const [gmailToken, setGmailToken] = useState<string | null>(null);
+  const [gmailUserEmail, setGmailUserEmail] = useState<string>('');
+
+  // Email thread drawer state
+  const [threadDrawerThread, setThreadDrawerThread] = useState<EmailThread | null>(null);
+
+  const { threads, getThread, saveInitialThread, refreshThread, addReplyToThread } = useEmailThreads();
 
   const EXTENSION_ID = process.env.REACT_APP_EXTENSION_ID || 'obifncifgmneplklobmfbmhjahjfbkpa';
 
-  const openEmailDrawer = useCallback(async (record: SylectusLoad, brokerEmail?: string) => {
-    setEmailLoad(record);
-    setEmailTo(brokerEmail || '');
-    // Fetch Gmail token if not already cached
-    if (!gmailToken && typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+  const fetchGmailToken = useCallback(async (): Promise<string | null> => {
+    if (gmailToken) return gmailToken;
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       try {
         const res: any = await new Promise((resolve, reject) => {
           chrome.runtime.sendMessage(EXTENSION_ID, { type: 'GMAIL_GET_TOKEN' }, (r) => {
@@ -253,12 +279,37 @@ const SylectusPage: React.FC = () => {
             else resolve(r);
           });
         });
-        if (res?.success && res?.token) setGmailToken(res.token);
+        if (res?.success && res?.token) {
+          setGmailToken(res.token);
+          return res.token;
+        }
       } catch {
-        // token fetch failed — compose form will show connect prompt
+        // token fetch failed
       }
     }
+    return null;
   }, [gmailToken, EXTENSION_ID]);
+
+  const openEmailDrawer = useCallback(async (record: SylectusLoad, brokerEmail?: string) => {
+    setEmailLoad(record);
+    setEmailTo(brokerEmail || '');
+    await fetchGmailToken();
+  }, [fetchGmailToken]);
+
+  const openThreadDrawer = useCallback(async (load: SylectusLoad) => {
+    const thread = getThread(load.id);
+    if (!thread) return;
+    const token = await fetchGmailToken();
+    if (token && !gmailUserEmail) {
+      // Try to get user email from token
+      try {
+        const r = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${token}`);
+        const d = await r.json();
+        if (d.email) setGmailUserEmail(d.email);
+      } catch { /* silent */ }
+    }
+    setThreadDrawerThread(thread);
+  }, [getThread, fetchGmailToken, gmailUserEmail]);
 
   const fetchBrokerDetails = useCallback(async (record: SylectusLoad) => {
     if (!record.pronumuk || !record.mabcode || !record.postedby) return;
@@ -307,7 +358,7 @@ const SylectusPage: React.FC = () => {
     ? `${activeLane.searchParams.fromCity}, ${activeLane.searchParams.fromState}`
     : '';
 
-  // Add DH-O column after Origin (index 1)
+  // Add DH-O column after Origin (index 1), and Contacted column at the end
   const tableColumns = useMemo((): ColumnsType<SylectusLoad> => {
     const dhOCol: ColumnsType<SylectusLoad>[0] = {
       title: 'DH-O',
@@ -318,10 +369,35 @@ const SylectusPage: React.FC = () => {
         <DhOCell loadOrigin={row.origin} laneOriginQuery={laneOriginQuery} />
       ),
     };
+    const contactedCol: ColumnsType<SylectusLoad>[0] = {
+      title: 'Contacted',
+      key: 'contacted',
+      width: 100,
+      align: 'center' as const,
+      render: (_: any, row: SylectusLoad) => {
+        const thread = threads[row.id];
+        if (!thread) return null;
+        const count = thread.messages.length;
+        const hasReply = thread.messages.some((m) => m.direction === 'received');
+        return (
+          <Tooltip title={`${count} message${count !== 1 ? 's' : ''}${hasReply ? ' · Reply received!' : ''} — click to view`}>
+            <Tag
+              color={hasReply ? 'success' : 'blue'}
+              style={{ cursor: 'pointer', fontSize: 11 }}
+              onClick={(e) => { e.stopPropagation(); openThreadDrawer(row); }}
+            >
+              <MailOutlined style={{ marginRight: 3 }} />
+              Email {count}
+            </Tag>
+          </Tooltip>
+        );
+      },
+    };
     const cols = [...LOAD_COLUMNS];
     cols.splice(2, 0, dhOCol); // insert between Origin and Destination
+    cols.push(contactedCol);
     return cols;
-  }, [laneOriginQuery]);
+  }, [laneOriginQuery, threads, openThreadDrawer]);
 
   const handleActivate = useCallback((id: string) => {
     setActiveLaneId(id);
@@ -358,7 +434,7 @@ const SylectusPage: React.FC = () => {
               <Switch
                 size="small"
                 checked={autoRefresh}
-                onChange={setAutoRefresh}
+                onChange={handleAutoRefreshChange}
                 checkedChildren="Auto"
                 unCheckedChildren="Manual"
               />
@@ -368,6 +444,11 @@ const SylectusPage: React.FC = () => {
                     <Option key={o.value} value={o.value}>{o.label}</Option>
                   ))}
                 </Select>
+              )}
+              {autoRefresh && (
+                <Tooltip title="Auto-refresh will turn off automatically after 15 minutes">
+                  <Text type="secondary" style={{ fontSize: 11 }}>⏱ 15 min limit</Text>
+                </Tooltip>
               )}
             </Space>
             <Tooltip title="Refresh all lanes now">
@@ -636,9 +717,42 @@ const SylectusPage: React.FC = () => {
             initialTo={emailTo}
             dispatcherName={localStorage.getItem('dispatcher_settings_v1') || ''}
             onDone={() => setEmailLoad(null)}
+            onSent={({ messageId, threadId, subject, body, to, from, sentAt }) => {
+              if (emailLoad) {
+                saveInitialThread(emailLoad, threadId, messageId, subject, body, to, from, sentAt);
+                if (from && !gmailUserEmail) setGmailUserEmail(from);
+              }
+            }}
           />
         )}
       </Drawer>
+
+      {/* Email thread drawer */}
+      {threadDrawerThread && gmailToken && (
+        <EmailThreadDrawer
+          thread={threadDrawerThread}
+          gmailToken={gmailToken}
+          userEmail={gmailUserEmail}
+          open={threadDrawerThread !== null}
+          onClose={() => setThreadDrawerThread(null)}
+          onRefresh={async () => {
+            if (!threadDrawerThread || !gmailToken) return;
+            await refreshThread(threadDrawerThread.loadId, gmailToken, gmailUserEmail);
+            // Update the drawer with the refreshed thread from state
+            setThreadDrawerThread((prev) =>
+              prev ? (threads[prev.loadId] ?? prev) : null
+            );
+          }}
+          onReplySent={(messageId, gmailThreadId, body, to, from, sentAt) => {
+            if (threadDrawerThread) {
+              addReplyToThread(threadDrawerThread.loadId, messageId, gmailThreadId, body, to, from, sentAt);
+              setThreadDrawerThread((prev) =>
+                prev ? { ...prev, messages: [...prev.messages, { messageId, gmailThreadId, direction: 'sent', subject: `Re: ${prev.messages[0]?.subject || ''}`, snippet: body.slice(0, 120), body, from, to, sentAt }] } : null
+              );
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
