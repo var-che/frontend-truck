@@ -22,7 +22,6 @@ import {
   ReloadOutlined,
   ClockCircleOutlined,
   PhoneOutlined,
-  DownOutlined,
   MailOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -35,6 +34,8 @@ import EmailComposeForm from './email/EmailComposeForm';
 import EmailThreadDrawer from './email/EmailThreadDrawer';
 import { useEmailThreads } from '../hooks/useEmailThreads';
 import { EmailThread } from '../types/email';
+import LoadRouteMap from './sylectus/LoadRouteMap';
+import { useAuth } from '../context/AuthContext';
 import {
   GeocodingService,
   GeocodingProviderType,
@@ -45,6 +46,9 @@ const { Option } = Select;
 
 // Module-level geocode cache (persists across renders and lane switches)
 const geoCache = new Map<string, { lat: number; lng: number } | null>();
+
+// Module-level deadhead result cache: key = "<laneOrigin>|<loadOrigin>" → miles
+const dhResultCache = new Map<string, number>();
 
 function haversineDeadhead(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3959;
@@ -63,15 +67,22 @@ const DhOCell: React.FC<{ loadOrigin: string; laneOriginQuery: string }> = ({
   loadOrigin,
   laneOriginQuery,
 }) => {
-  const [dh, setDh] = useState<number | null>(null);
+  const cacheKey = `${laneOriginQuery}|${loadOrigin}`;
+  const [dh, setDh] = useState<number | null>(() => dhResultCache.get(cacheKey) ?? null);
   const [loading, setLoading] = useState(false);
-  const hasTriedRef = useRef(false);
+  const hasTriedRef = useRef(dh !== null); // skip hover if already cached
 
   useEffect(() => {
-    hasTriedRef.current = false;
-    setDh(null);
-    setLoading(false);
-  }, [laneOriginQuery]);
+    const cached = dhResultCache.get(`${laneOriginQuery}|${loadOrigin}`);
+    if (cached != null) {
+      setDh(cached);
+      hasTriedRef.current = true;
+    } else {
+      hasTriedRef.current = false;
+      setDh(null);
+      setLoading(false);
+    }
+  }, [laneOriginQuery, loadOrigin]);
 
   const handleHover = useCallback(async () => {
     if (hasTriedRef.current || !laneOriginQuery || !loadOrigin) return;
@@ -87,7 +98,11 @@ const DhOCell: React.FC<{ loadOrigin: string; laneOriginQuery: string }> = ({
         return coords;
       };
       const [from, to] = await Promise.all([geocode(laneOriginQuery), geocode(loadOrigin)]);
-      if (from && to) setDh(haversineDeadhead(from.lat, from.lng, to.lat, to.lng));
+      if (from && to) {
+        const miles = haversineDeadhead(from.lat, from.lng, to.lat, to.lng);
+        dhResultCache.set(`${laneOriginQuery}|${loadOrigin}`, miles);
+        setDh(miles);
+      }
     } catch {
       // silent
     } finally {
@@ -139,11 +154,6 @@ const LOAD_COLUMNS: ColumnsType<SylectusLoad> = [
       <div>
         <Text style={{ fontSize: 12 }}>{val || '—'}</Text>
         {row.dhO && <div style={{ fontSize: 10, color: '#888' }}>DH: {row.dhO}</div>}
-        {row.notes && (
-          <div style={{ fontSize: 10, color: '#888', fontStyle: 'italic', marginTop: 2, maxWidth: 200, whiteSpace: 'normal', lineHeight: '14px' }}>
-            {row.notes}
-          </div>
-        )}
       </div>
     ),
   },
@@ -151,13 +161,19 @@ const LOAD_COLUMNS: ColumnsType<SylectusLoad> = [
     title: 'Destination',
     dataIndex: 'destination',
     key: 'destination',
-    width: 140,
-    render: (val: string, row: SylectusLoad) => (
-      <div>
-        <Text style={{ fontSize: 12 }}>{val || 'Open'}</Text>
-        {row.dhD && <div style={{ fontSize: 10, color: '#888' }}>DH: {row.dhD}</div>}
-      </div>
-    ),
+    width: 180,
+    render: (val: string, row: SylectusLoad) => {
+      const zip = row.deliveryLocation?.zipCode;
+      const cityState = val || 'Open';
+      // Build a single line: "CITY, ST 12345" if zip not already in the string
+      const display = zip && !cityState.includes(zip) ? `${cityState} ${zip}` : cityState;
+      return (
+        <div>
+          <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{display}</Text>
+          {row.dhD && <div style={{ fontSize: 10, color: '#888' }}>DH: {row.dhD}</div>}
+        </div>
+      );
+    },
   },
   {
     title: 'Pickup / Delivery',
@@ -195,8 +211,8 @@ const LOAD_COLUMNS: ColumnsType<SylectusLoad> = [
     title: 'Eq',
     dataIndex: 'eq',
     key: 'eq',
-    width: 75,
-    render: (val: string) => val ? <Tag color="blue" style={{ fontSize: 11 }}>{val}</Tag> : '—',
+    width: 130,
+    render: (val: string) => val ? <Tag color="blue" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{val}</Tag> : '—',
   },
   {
     title: 'Specs',
@@ -238,6 +254,17 @@ const SylectusPage: React.FC = () => {
   const [brokerDetails, setBrokerDetails] = useState<Record<string, Record<string, string>>>({});
   const [brokerLoading, setBrokerLoading] = useState<Record<string, boolean>>({});
 
+  // Tracks which row IDs the user has expanded (viewed) — persists across page navigation via sessionStorage
+  const [seenRowIds, setSeenRowIds] = useState<Set<string>>(() => {
+    try {
+      const stored = sessionStorage.getItem('sylectus_seen_rows');
+      return stored ? new Set<string>(JSON.parse(stored)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
+
   // Auto-off after 15 minutes
   const handleAutoRefreshChange = useCallback((checked: boolean) => {
     setAutoRefresh(checked);
@@ -259,57 +286,24 @@ const SylectusPage: React.FC = () => {
   // Email compose drawer state
   const [emailLoad, setEmailLoad] = useState<SylectusLoad | null>(null);
   const [emailTo, setEmailTo] = useState<string>('');
-  const [gmailToken, setGmailToken] = useState<string | null>(null);
-  const [gmailUserEmail, setGmailUserEmail] = useState<string>('');
+  const { gmailToken, userEmail: gmailUserEmail } = useAuth();
+  const [dhMilesCache, setDhMilesCache] = useState<Record<string, number>>({});
 
   // Email thread drawer state
   const [threadDrawerThread, setThreadDrawerThread] = useState<EmailThread | null>(null);
 
   const { threads, getThread, saveInitialThread, refreshThread, addReplyToThread } = useEmailThreads();
 
-  const EXTENSION_ID = process.env.REACT_APP_EXTENSION_ID || 'obifncifgmneplklobmfbmhjahjfbkpa';
-
-  const fetchGmailToken = useCallback(async (): Promise<string | null> => {
-    if (gmailToken) return gmailToken;
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      try {
-        const res: any = await new Promise((resolve, reject) => {
-          chrome.runtime.sendMessage(EXTENSION_ID, { type: 'GMAIL_GET_TOKEN' }, (r) => {
-            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-            else resolve(r);
-          });
-        });
-        if (res?.success && res?.token) {
-          setGmailToken(res.token);
-          return res.token;
-        }
-      } catch {
-        // token fetch failed
-      }
-    }
-    return null;
-  }, [gmailToken, EXTENSION_ID]);
-
   const openEmailDrawer = useCallback(async (record: SylectusLoad, brokerEmail?: string) => {
     setEmailLoad(record);
     setEmailTo(brokerEmail || '');
-    await fetchGmailToken();
-  }, [fetchGmailToken]);
+  }, []);
 
   const openThreadDrawer = useCallback(async (load: SylectusLoad) => {
     const thread = getThread(load.id);
     if (!thread) return;
-    const token = await fetchGmailToken();
-    if (token && !gmailUserEmail) {
-      // Try to get user email from token
-      try {
-        const r = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${token}`);
-        const d = await r.json();
-        if (d.email) setGmailUserEmail(d.email);
-      } catch { /* silent */ }
-    }
     setThreadDrawerThread(thread);
-  }, [getThread, fetchGmailToken, gmailUserEmail]);
+  }, [getThread]);
 
   const fetchBrokerDetails = useCallback(async (record: SylectusLoad) => {
     if (!record.pronumuk || !record.mabcode || !record.postedby) return;
@@ -358,6 +352,30 @@ const SylectusPage: React.FC = () => {
     ? `${activeLane.searchParams.fromCity}, ${activeLane.searchParams.fromState}`
     : '';
 
+  // Compute deadhead miles when email drawer opens (for {{dh_miles}} template var)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!emailLoad || !laneOriginQuery || dhMilesCache[emailLoad.id] != null) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const provider = GeocodingService.getProvider(GeocodingProviderType.TRIMBLE_MAPS);
+        const geocode = async (q: string) => {
+          if (geoCache.has(q)) return geoCache.get(q)!;
+          const r = await provider.geocodeAddress(q);
+          const coords = r?.lat != null ? { lat: r.lat, lng: r.lng } : null;
+          geoCache.set(q, coords);
+          return coords;
+        };
+        const [from, to] = await Promise.all([geocode(laneOriginQuery), geocode(emailLoad.origin)]);
+        if (!cancelled && from && to) {
+          setDhMilesCache((prev) => ({ ...prev, [emailLoad.id]: haversineDeadhead(from.lat, from.lng, to.lat, to.lng) }));
+        }
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [emailLoad, laneOriginQuery]);
+
   // Add DH-O column after Origin (index 1), and Contacted column at the end
   const tableColumns = useMemo((): ColumnsType<SylectusLoad> => {
     const dhOCol: ColumnsType<SylectusLoad>[0] = {
@@ -366,7 +384,10 @@ const SylectusPage: React.FC = () => {
       width: 58,
       align: 'center' as const,
       render: (_: any, row: SylectusLoad) => (
-        <DhOCell loadOrigin={row.origin} laneOriginQuery={laneOriginQuery} />
+        <DhOCell
+          loadOrigin={row.pickupLocation?.fullAddress || row.origin}
+          laneOriginQuery={laneOriginQuery}
+        />
       ),
     };
     const contactedCol: ColumnsType<SylectusLoad>[0] = {
@@ -398,6 +419,73 @@ const SylectusPage: React.FC = () => {
     cols.push(contactedCol);
     return cols;
   }, [laneOriginQuery, threads, openThreadDrawer]);
+
+  // Filtered loads for the active lane — shared by table dataSource, Card title, and notes row renderer
+  const filteredLoads = useMemo(() => {
+    const loads = activeLane?.loads ?? [];
+    const sp = activeLane?.searchParams;
+    if (!sp) return loads;
+    return loads.filter((load) => {
+      if (sp.equipmentTypes && sp.equipmentTypes.length > 0) {
+        const eq = (load.eq || '').toUpperCase();
+        if (sp.equipmentTypes.some((t: string) => { const tu = t.toUpperCase(); return eq === tu || eq.includes(tu); })) return false;
+      }
+      if (sp.minMiles != null && (load.trip ?? 0) < sp.minMiles) return false;
+      if (sp.maxMiles != null && (load.trip ?? 0) > sp.maxMiles) return false;
+      return true;
+    });
+  }, [activeLane?.loads, activeLane?.searchParams]);
+
+  // Custom row renderer: injects a full-width notes strip below rows that have notes
+  const tableComponents = useMemo(() => ({
+    body: {
+      row: (props: React.HTMLAttributes<HTMLTableRowElement> & { 'data-row-key'?: string }) => {
+        const rowKey = props['data-row-key'];
+        const record = filteredLoads.find((r) => r.id === rowKey);
+        if (record?.notes) {
+          return (
+            <>
+              <tr {...props} />
+              <tr>
+                <td
+                  colSpan={100}
+                  style={{
+                    padding: '1px 12px 4px 44px',
+                    background: '#fffbe6',
+                    borderBottom: '1px solid #f0f0f0',
+                    fontSize: 11,
+                    color: '#595959',
+                    fontStyle: 'italic',
+                    lineHeight: '17px',
+                    fontWeight: 400,
+                  }}
+                >
+                  {record.notes}
+                </td>
+              </tr>
+            </>
+          );
+        }
+        return <tr {...props} />;
+      },
+    },
+  }), [filteredLoads]);
+
+  const handleExpand = useCallback((expanded: boolean, record: SylectusLoad) => {
+    if (expanded) {
+      if (resolvedActiveId) markLoadSeen(resolvedActiveId, record.id);
+      fetchBrokerDetails(record);
+      setSeenRowIds((prev) => {
+        const next = new Set(prev);
+        next.add(record.id);
+        try { sessionStorage.setItem('sylectus_seen_rows', JSON.stringify(Array.from(next))); } catch { /* ignore */ }
+        return next;
+      });
+    }
+    setExpandedRowKeys((prev) =>
+      expanded ? [...prev, record.id] : prev.filter((k) => k !== record.id)
+    );
+  }, [resolvedActiveId, markLoadSeen, fetchBrokerDetails]);
 
   const handleActivate = useCallback((id: string) => {
     setActiveLaneId(id);
@@ -499,7 +587,9 @@ const SylectusPage: React.FC = () => {
             </Text>
             {activeLane && activeLane.lastRefresh && (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                {activeLane.loads.length} loads · updated {activeLane.lastRefresh}
+                {filteredLoads.length < activeLane.loads.length
+                  ? `${filteredLoads.length} of ${activeLane.loads.length} loads (filtered) · updated ${activeLane.lastRefresh}`
+                  : `${activeLane.loads.length} loads · updated ${activeLane.lastRefresh}`}
               </Text>
             )}
             {(activeLane?.newCount ?? 0) > 0 && (
@@ -533,160 +623,163 @@ const SylectusPage: React.FC = () => {
         ) : (
           <Table<SylectusLoad>
             columns={tableColumns}
-            dataSource={activeLane?.loads ?? []}
+            dataSource={filteredLoads}
             rowKey="id"
             size="small"
+            className="sylectus-loads-table"
+            components={tableComponents}
             pagination={{ pageSize: 25, size: 'small', showTotal: (t) => `${t} loads` }}
-            scroll={{ x: 1000 }}
-            rowClassName={(row) =>
-              activeLane?.newLoadIds.has(row.id) ? 'sylectus-new-row' : ''
-            }
+            onRow={(record) => ({
+              onClick: () => handleExpand(!expandedRowKeys.includes(record.id), record),
+              style: { cursor: 'pointer' },
+            })}
+            rowClassName={(row, index) => {
+              const classes: string[] = [];
+              if (index % 2 === 1) classes.push('sylectus-stripe-row');
+              if (activeLane?.newLoadIds.has(row.id)) classes.push('sylectus-new-row');
+              if (seenRowIds.has(row.id)) classes.push('sylectus-viewed-row');
+              return classes.join(' ');
+            }}
             expandable={{
+              showExpandColumn: false,
+              expandedRowKeys,
+              onExpand: handleExpand,
               expandedRowRender: (record) => {
                 const bd = brokerDetails[record.id];
                 const bdLoading = brokerLoading[record.id];
-                return (
-                  <div style={{ padding: '8px 16px', background: '#fafafa', borderRadius: 4 }}>
-                    <Row gutter={[16, 8]}>
-                      {record.notes && (
-                        <Col xs={24}>
-                          <Text strong>Notes: </Text><Text>{record.notes}</Text>
-                        </Col>
-                      )}
-                      {record.pickupLocation?.fullAddress && (
-                        <Col xs={24} md={12}>
-                          <Text strong>Pickup: </Text><Text>{record.pickupLocation.fullAddress}</Text>
-                        </Col>
-                      )}
-                      {record.deliveryLocation?.fullAddress && (
-                        <Col xs={24} md={12}>
-                          <Text strong>Delivery: </Text><Text>{record.deliveryLocation.fullAddress}</Text>
-                        </Col>
-                      )}
-                      {record.refNo && (
-                        <Col xs={12} md={6}>
-                          <Text strong>Ref#: </Text><Text>{record.refNo}</Text>
-                        </Col>
-                      )}
-                      {record.orderNo && (
-                        <Col xs={12} md={6}>
-                          <Text strong>Order#: </Text><Text>{record.orderNo}</Text>
-                        </Col>
-                      )}
-                      {record.daysToPayCredit && (
-                        <Col xs={12} md={6}>
-                          <Text strong>Pay: </Text>
-                          <Text>{record.daysToPayCredit.days != null ? `${record.daysToPayCredit.days} days` : '—'}
-                            {record.daysToPayCredit.score ? ` (${record.daysToPayCredit.score})` : ''}
-                          </Text>
-                        </Col>
-                      )}
-                      {record.saferUrl && (
-                        <Col xs={24}>
-                          <a href={record.saferUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
-                            SAFER report
-                          </a>
-                        </Col>
-                      )}
+                const brokerEmail = bd?.['E-MAIL'];
+                const hazmatText = [record.otherInfo, record.notes].filter(Boolean).join(' ');
+                const isHazmat = /\bhaz/i.test(hazmatText);
 
-                      {/* Broker profile details */}
-                      {bdLoading && (
-                        <Col xs={24}>
-                          <Spin size="small" style={{ marginRight: 8 }} />
-                          <Text type="secondary" style={{ fontSize: 11 }}>Loading broker details…</Text>
-                        </Col>
-                      )}
-                      {bd && (
-                        <>
-                          <Col xs={24}>
-                            <Divider style={{ margin: '6px 0' }} />
-                          </Col>
-                          {bd['COMPANY NAME'] && (
-                            <Col xs={24} md={12}>
-                              <Text strong>Company: </Text><Text>{bd['COMPANY NAME']}</Text>
-                            </Col>
+                return (
+                  <div style={{ padding: '10px 16px 14px', background: '#fafafa', borderRadius: 4 }}>
+
+                    {/* TWO-PANEL LAYOUT — Left: info, Right: routing map */}
+                    <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
+
+                      {/* ── LEFT PANEL: Broker + Load Details ── */}
+                      <div style={{
+                        width: 220,
+                        minWidth: 220,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 0,
+                        fontSize: 12,
+                        lineHeight: '22px',
+                        background: '#fff',
+                        border: '1px solid #e8e8e8',
+                        borderRadius: 6,
+                        overflow: 'hidden',
+                      }}>
+
+                        {/* Broker section */}
+                        <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ fontWeight: 600, fontSize: 11, color: '#1677ff', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                            Broker
+                          </div>
+                          {bdLoading && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#8c8c8c', fontSize: 11 }}>
+                              <Spin size="small" /> Loading…
+                            </div>
                           )}
-                          {bd['POSTED BY PHONE'] && (
-                            <Col xs={12} md={6}>
-                              <Text strong>Phone: </Text><Text>{bd['POSTED BY PHONE']}</Text>
-                            </Col>
+                          {(bd?.['COMPANY NAME'] || record.company) && (
+                            <div style={{ fontWeight: 600, marginBottom: 2 }}>{bd?.['COMPANY NAME'] || record.company}</div>
                           )}
-                          {bd['E-MAIL'] && (
-                            <Col xs={12} md={8}>
-                              <Text strong>Email: </Text>
-                              <a href={`mailto:${bd['E-MAIL']}`} style={{ fontSize: 12 }}>{bd['E-MAIL']}</a>
-                            </Col>
+                          {bd?.['POSTED BY PHONE'] && (
+                            <div>
+                              <PhoneOutlined style={{ marginRight: 4, color: '#8c8c8c', fontSize: 11 }} />
+                              {bd['POSTED BY PHONE']}
+                            </div>
                           )}
-                          {bd['BROKER MC NUMBER'] && (
-                            <Col xs={12} md={6}>
-                              <Text strong>MC#: </Text><Text>{bd['BROKER MC NUMBER']}</Text>
-                            </Col>
+                          {brokerEmail && (
+                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <MailOutlined style={{ marginRight: 4, color: '#8c8c8c', fontSize: 11 }} />
+                              <a href={`mailto:${brokerEmail}`} style={{ fontSize: 11 }}>{brokerEmail}</a>
+                            </div>
                           )}
-                          {bd['TRANSCREDIT DAYS TO PAY'] && (
-                            <Col xs={12} md={6}>
-                              <Text strong>Days to pay: </Text><Text>{bd['TRANSCREDIT DAYS TO PAY']}</Text>
-                            </Col>
+                          {bd?.['BROKER MC NUMBER'] && (
+                            <div>
+                              <Text type="secondary" style={{ fontSize: 11 }}>MC# </Text>
+                              {bd['BROKER MC NUMBER']}
+                            </div>
                           )}
-                          {bd['TRANSCREDIT CREDIT SCORE'] && (
-                            <Col xs={12} md={6}>
-                              <Text strong>Credit score: </Text><Text>{bd['TRANSCREDIT CREDIT SCORE']}</Text>
-                            </Col>
+                          {bd?.['TRANSCREDIT DAYS TO PAY'] && (
+                            <div style={{ fontSize: 11 }}>
+                              <Text type="secondary">Pay: </Text>
+                              {bd['TRANSCREDIT DAYS TO PAY']}d
+                              {bd['TRANSCREDIT CREDIT SCORE'] && (
+                                <Tag color="green" style={{ marginLeft: 4, fontSize: 10 }}>{bd['TRANSCREDIT CREDIT SCORE']}</Tag>
+                              )}
+                            </div>
                           )}
-                          {bd['NOTES'] && (
-                            <Col xs={24}>
-                              <Text strong>Order notes: </Text><Text>{bd['NOTES']}</Text>
-                            </Col>
+                          {record.saferUrl && (
+                            <a href={record.saferUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }}>
+                              SAFER ↗
+                            </a>
                           )}
-                          {bd['COMPANY ADDRESS'] && (
-                            <Col xs={24} md={12}>
-                              <Text strong>Address: </Text><Text>{bd['COMPANY ADDRESS']}</Text>
-                            </Col>
+                          {!bd && !bdLoading && (
+                            <div style={{ fontSize: 11, color: '#bfbfbf' }}>Broker details loading…</div>
                           )}
-                          <Col xs={24} style={{ marginTop: 6 }}>
-                            <Button
-                              size="small"
-                              icon={<MailOutlined />}
-                              onClick={() => openEmailDrawer(record, bd['E-MAIL'])}
-                            >
-                              Compose Email
-                            </Button>
-                          </Col>
-                        </>
-                      )}
-                      {/* Mail button even without broker details */}
-                      {!bd && !bdLoading && (
-                        <Col xs={24} style={{ marginTop: 4 }}>
+                        </div>
+
+                        {/* Load details section */}
+                        <div style={{ padding: '8px 12px', flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: 11, color: '#1677ff', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                            Load Details
+                          </div>
+                          <div style={{ fontSize: 11, lineHeight: '21px' }}>
+                            <div><Text type="secondary">Pieces: </Text><strong>{record.pieces || '—'}</strong></div>
+                            <div><Text type="secondary">Weight: </Text><strong>{record.weight ? `${record.weight.toLocaleString()} lbs` : '—'}</strong></div>
+                            <div><Text type="secondary">Length: </Text>{record.length && record.length !== 'N/A' ? record.length : '—'}</div>
+                            <div>
+                              <Text type="secondary">Hazmat: </Text>
+                              {isHazmat ? <Tag color="error" style={{ fontSize: 10 }}>YES</Tag> : '—'}
+                            </div>
+                            {record.daysToPayCredit?.days != null && (
+                              <div>
+                                <Text type="secondary">Pay: </Text>
+                                {record.daysToPayCredit.days} days
+                                {record.daysToPayCredit.score ? ` (${record.daysToPayCredit.score})` : ''}
+                              </div>
+                            )}
+                            {(record.refNo || record.orderNo) && (
+                              <div style={{ marginTop: 4, color: '#8c8c8c' }}>
+                                {record.refNo && <span>Ref {record.refNo} </span>}
+                                {record.orderNo && <span>Ord {record.orderNo}</span>}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Compose email */}
+                        <div style={{ padding: '8px 12px', borderTop: '1px solid #f0f0f0' }}>
                           <Button
                             size="small"
                             icon={<MailOutlined />}
-                            onClick={() => openEmailDrawer(record)}
+                            style={{ width: '100%', fontSize: 11 }}
+                            onClick={() => openEmailDrawer(record, brokerEmail)}
                           >
                             Compose Email
                           </Button>
-                        </Col>
-                      )}
-                    </Row>
+                        </div>
+                      </div>
+
+                      {/* ── RIGHT PANEL: Full routing map ── */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <LoadRouteMap
+                          key={record.id}
+                          origin={record.pickupLocation?.fullAddress || record.origin}
+                          destination={record.deliveryLocation?.fullAddress || record.destination}
+                          loadId={record.id}
+                          userOrigin={laneOriginQuery || undefined}
+                        />
+                      </div>
+
+                    </div>
                   </div>
                 );
               },
-              expandIcon: ({ expanded, onExpand, record }) => (
-                <Tooltip title={expanded ? 'Hide details' : 'Show details'}>
-                  <DownOutlined
-                    onClick={(e) => {
-                      if (!expanded && resolvedActiveId) markLoadSeen(resolvedActiveId, record.id);
-                      if (!expanded) fetchBrokerDetails(record);
-                      onExpand(record, e as any);
-                    }}
-                    style={{
-                      cursor: 'pointer',
-                      color: expanded ? '#1677ff' : '#bbb',
-                      fontSize: 11,
-                      transition: 'transform 0.2s',
-                      transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                    }}
-                  />
-                </Tooltip>
-              ),
+
             }}
             locale={{
               emptyText: !activeLane
@@ -715,12 +808,12 @@ const SylectusPage: React.FC = () => {
             gmailToken={gmailToken}
             load={emailLoad}
             initialTo={emailTo}
+            dhMiles={emailLoad ? dhMilesCache[emailLoad.id] : undefined}
             dispatcherName={localStorage.getItem('dispatcher_settings_v1') || ''}
             onDone={() => setEmailLoad(null)}
             onSent={({ messageId, threadId, subject, body, to, from, sentAt }) => {
               if (emailLoad) {
                 saveInitialThread(emailLoad, threadId, messageId, subject, body, to, from, sentAt);
-                if (from && !gmailUserEmail) setGmailUserEmail(from);
               }
             }}
           />
@@ -732,12 +825,12 @@ const SylectusPage: React.FC = () => {
         <EmailThreadDrawer
           thread={threadDrawerThread}
           gmailToken={gmailToken}
-          userEmail={gmailUserEmail}
+          userEmail={gmailUserEmail ?? ''}
           open={threadDrawerThread !== null}
           onClose={() => setThreadDrawerThread(null)}
           onRefresh={async () => {
             if (!threadDrawerThread || !gmailToken) return;
-            await refreshThread(threadDrawerThread.loadId, gmailToken, gmailUserEmail);
+            await refreshThread(threadDrawerThread.loadId, gmailToken, gmailUserEmail ?? '');
             // Update the drawer with the refreshed thread from state
             setThreadDrawerThread((prev) =>
               prev ? (threads[prev.loadId] ?? prev) : null

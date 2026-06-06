@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { Input } from "antd";
 import { EMAIL_VARIABLES } from "../../services/EmailVariableResolver";
-import { EmailVariable } from "../../types/email";
+import { EmailVariable, EmailSnippet } from "../../types/email";
 
 const { TextArea } = Input;
 
@@ -17,6 +17,12 @@ interface SlashCommandTextareaProps {
   placeholder?: string;
   rows?: number;
   style?: React.CSSProperties;
+  /** When provided, inserting a variable will use the resolved value instead of {{key}} */
+  resolvedValues?: Record<string, string>;
+  /** User-defined snippets, matched by shortcut */
+  snippets?: EmailSnippet[];
+  /** Called when Ctrl+Enter is pressed and the slash-command menu is not open */
+  onCtrlEnter?: () => void;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -36,6 +42,9 @@ const SlashCommandTextarea: React.FC<SlashCommandTextareaProps> = ({
   placeholder,
   rows = 12,
   style,
+  resolvedValues,
+  snippets = [],
+  onCtrlEnter,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [showMenu, setShowMenu] = useState(false);
@@ -54,6 +63,10 @@ const SlashCommandTextarea: React.FC<SlashCommandTextareaProps> = ({
       v.label.toLowerCase().includes(filter.toLowerCase())
   );
 
+  const filteredSnippets: EmailSnippet[] = snippets.filter(
+    (s) => !filter || s.shortcut.toLowerCase().includes(filter.toLowerCase())
+  );
+
   // Group by category for display
   const grouped = filteredVars.reduce<Record<string, EmailVariable[]>>(
     (acc, v) => {
@@ -64,35 +77,44 @@ const SlashCommandTextarea: React.FC<SlashCommandTextareaProps> = ({
     {}
   );
 
-  // Build flat list for keyboard navigation
-  const flatList: EmailVariable[] = Object.values(grouped).flat();
+  // Build flat list for keyboard navigation: snippets first, then variables
+  const flatListVars: EmailVariable[] = Object.values(grouped).flat();
+  // Combined flat list index: 0..snippets-1 are snippets, rest are variables
+  const totalItems = filteredSnippets.length + flatListVars.length;
 
-  const insertVariable = useCallback(
-    (variable: EmailVariable) => {
+  const insertText = useCallback(
+    (text: string) => {
       const el = textareaRef.current;
       if (!el || slashPos.current < 0) return;
-
       const before = value.slice(0, slashPos.current);
       const afterSlash = value.slice(slashPos.current + 1);
-      // Remove the filter text that was typed after /
       const afterFilter = afterSlash.slice(filter.length);
-      const insertion = `{{${variable.key}}}`;
-      const next = before + insertion + afterFilter;
+      const next = before + text + afterFilter;
       onChange(next);
-
-      // Move cursor after the inserted variable
       requestAnimationFrame(() => {
         if (!el) return;
-        const pos = (before + insertion).length;
+        const pos = (before + text).length;
         el.setSelectionRange(pos, pos);
         el.focus();
       });
-
       setShowMenu(false);
       setFilter("");
       slashPos.current = -1;
     },
     [value, onChange, filter]
+  );
+
+  const insertVariable = useCallback(
+    (variable: EmailVariable) => {
+      const resolvedVal = resolvedValues?.[variable.key];
+      insertText(resolvedVal ? resolvedVal : `{{${variable.key}}}`);
+    },
+    [insertText, resolvedValues]
+  );
+
+  const insertSnippet = useCallback(
+    (snippet: EmailSnippet) => { insertText(snippet.body); },
+    [insertText]
   );
 
   const handleChange = useCallback(
@@ -139,22 +161,31 @@ const SlashCommandTextarea: React.FC<SlashCommandTextareaProps> = ({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (!showMenu || flatList.length === 0) return;
+      if (e.ctrlKey && e.key === 'Enter' && !showMenu) {
+        e.preventDefault();
+        onCtrlEnter?.();
+        return;
+      }
+      if (!showMenu || totalItems === 0) return;
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setSelectedIndex((i) => (i + 1) % flatList.length);
+        setSelectedIndex((i) => (i + 1) % totalItems);
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSelectedIndex((i) => (i - 1 + flatList.length) % flatList.length);
+        setSelectedIndex((i) => (i - 1 + totalItems) % totalItems);
       } else if (e.key === "Enter" || e.key === "Tab") {
         e.preventDefault();
-        insertVariable(flatList[selectedIndex]);
+        if (selectedIndex < filteredSnippets.length) {
+          insertSnippet(filteredSnippets[selectedIndex]);
+        } else {
+          insertVariable(flatListVars[selectedIndex - filteredSnippets.length]);
+        }
       } else if (e.key === "Escape") {
         setShowMenu(false);
       }
     },
-    [showMenu, flatList, selectedIndex, insertVariable]
+    [showMenu, totalItems, filteredSnippets, flatListVars, selectedIndex, insertSnippet, insertVariable, onCtrlEnter]
   );
 
   return (
@@ -173,7 +204,7 @@ const SlashCommandTextarea: React.FC<SlashCommandTextareaProps> = ({
         autoSize={{ minRows: rows, maxRows: rows + 6 }}
       />
 
-      {showMenu && flatList.length > 0 && (
+      {showMenu && totalItems > 0 && (
         <div
           style={{
             position: "absolute",
@@ -189,6 +220,30 @@ const SlashCommandTextarea: React.FC<SlashCommandTextareaProps> = ({
             overflowY: "auto",
           }}
         >
+          {/* Snippets section */}
+          {filteredSnippets.length > 0 && (
+            <div>
+              <div style={{ padding: "4px 12px", fontSize: 11, fontWeight: 600, color: "#8c8c8c", textTransform: "uppercase", letterSpacing: "0.05em", background: "#fafafa", borderBottom: "1px solid #f0f0f0" }}>
+                Snippets
+              </div>
+              {filteredSnippets.map((s, i) => {
+                const isActive = i === selectedIndex;
+                return (
+                  <div
+                    key={s.id}
+                    onMouseEnter={() => setSelectedIndex(i)}
+                    onMouseDown={(e) => { e.preventDefault(); insertSnippet(s); }}
+                    style={{ padding: "6px 12px", cursor: "pointer", background: isActive ? "#e6f4ff" : "transparent", display: "flex", flexDirection: "column" }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: 12, color: "#1677ff" }}>/{s.shortcut}</span>
+                    <span style={{ fontSize: 11, color: "#595959" }}>{s.body.length > 60 ? s.body.slice(0, 60) + "…" : s.body}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Variables section */}
           {Object.entries(grouped).map(([category, vars]) => (
             <div key={category}>
               <div
@@ -206,7 +261,7 @@ const SlashCommandTextarea: React.FC<SlashCommandTextareaProps> = ({
                 {CATEGORY_LABELS[category] ?? category}
               </div>
               {vars.map((v) => {
-                const globalIdx = flatList.indexOf(v);
+                const globalIdx = filteredSnippets.length + flatListVars.indexOf(v);
                 const isActive = globalIdx === selectedIndex;
                 return (
                   <div
@@ -225,15 +280,10 @@ const SlashCommandTextarea: React.FC<SlashCommandTextareaProps> = ({
                     }}
                   >
                     <span style={{ fontWeight: 500, fontSize: 13 }}>
-                      {"{{"}{v.key}{"}}"}
-                      <span
-                        style={{ marginLeft: 6, color: "#595959", fontWeight: 400 }}
-                      >
-                        {v.label}
-                      </span>
+                      {v.label}
                     </span>
-                    <span style={{ fontSize: 11, color: "#8c8c8c" }}>
-                      {v.description}
+                    <span style={{ fontSize: 11, color: resolvedValues?.[v.key] ? "#52c41a" : "#8c8c8c" }}>
+                      {resolvedValues?.[v.key] ? `→ "${resolvedValues[v.key]}"` : v.description}
                     </span>
                   </div>
                 );

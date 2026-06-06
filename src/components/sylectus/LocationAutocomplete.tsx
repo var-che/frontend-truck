@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { AutoComplete, Input } from 'antd';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { AutoComplete, Input, Tag } from 'antd';
 import { debounce } from 'lodash';
 import {
   GeocodingService,
@@ -19,7 +19,7 @@ export interface LocationResult {
 interface Props {
   placeholder?: string;
   initialValue?: string;
-  onSelect: (location: LocationResult) => void;
+  onSelect: (location: LocationResult | null) => void;
   size?: 'small' | 'middle' | 'large';
   style?: React.CSSProperties;
 }
@@ -31,7 +31,7 @@ const US_STATES = new Set([
   'VA','WA','WV','WI','WY','DC',
 ]);
 
-/** Returns array of uppercase state codes if value looks like state(s), else null. */
+/** Returns array of uppercase state codes if all parts are valid US states, else null. */
 function parseStateInput(value: string): string[] | null {
   const upper = value.trim().toUpperCase();
   if (!upper) return null;
@@ -41,6 +41,11 @@ function parseStateInput(value: string): string[] | null {
   return null;
 }
 
+/** Determine if a confirmed value is in "state mode" (no city, all states). */
+function isStateModeValue(value: string): boolean {
+  return !!parseStateInput(value);
+}
+
 const LocationAutocomplete: React.FC<Props> = ({
   placeholder = 'City, State',
   initialValue = '',
@@ -48,12 +53,22 @@ const LocationAutocomplete: React.FC<Props> = ({
   size = 'small',
   style,
 }) => {
-  const [inputValue, setInputValue] = useState(initialValue);
+  /**
+   * confirmedValue: the stored, selected value (shown as chips).
+   * searchInput:    what the user is currently typing in the input field.
+   * confirmed:      whether a location has been chosen (shows chips).
+   */
+  const [confirmedValue, setConfirmedValue] = useState(initialValue);
+  const [searchInput, setSearchInput] = useState('');
   const [options, setOptions] = useState<LocationSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
+  const [confirmed, setConfirmed] = useState(() => !!initialValue);
 
+  // Sync when parent changes initialValue (e.g. lane reload)
   useEffect(() => {
-    setInputValue(initialValue);
+    setConfirmedValue(initialValue);
+    setConfirmed(!!initialValue);
+    setSearchInput('');
   }, [initialValue]);
 
   const provider = useMemo(
@@ -83,14 +98,11 @@ const LocationAutocomplete: React.FC<Props> = ({
 
   useEffect(() => () => debouncedSearch.cancel(), [debouncedSearch]);
 
-  const handleSearch = (value: string) => {
-    setInputValue(value);
+  const handleSearch = useCallback((value: string) => {
+    setSearchInput(value);
 
-    // Check for state-only or multi-state input (e.g. "MN", "MN,IL")
-    const upper = value.trim().toUpperCase();
-
-    // Ends with comma → user is still typing more states; don't search cities
-    if (upper.endsWith(',')) {
+    // Ends with comma → user is still typing more states
+    if (value.trim().toUpperCase().endsWith(',')) {
       debouncedSearch.cancel();
       setOptions([]);
       setLoading(false);
@@ -102,14 +114,10 @@ const LocationAutocomplete: React.FC<Props> = ({
       debouncedSearch.cancel();
       setLoading(false);
       const stateValue = states.join(',');
-      const label =
-        states.length === 1
-          ? `${stateValue} — State only`
-          : `${states.join(', ')} — Multiple states`;
       setOptions([
         {
           id: `state-${stateValue}`,
-          label,
+          label: `${states.join(', ')} — add state`,
           value: stateValue,
           address: stateValue,
           city: '',
@@ -122,31 +130,67 @@ const LocationAutocomplete: React.FC<Props> = ({
       return;
     }
 
-    // Regular city search (3+ chars)
     if (value) setLoading(true);
     debouncedSearch(value);
-  };
+  }, [debouncedSearch]);
 
-  const handleSelect = (_: string, option: any) => {
-    const suggestion = option as LocationSuggestion;
-    const display = suggestion.city && suggestion.state
-      ? `${suggestion.city}, ${suggestion.state}`
-      : suggestion.value || suggestion.label;
-    setInputValue(display);
-    onSelect({
-      displayName: display,
-      city: suggestion.city || '',
-      state: suggestion.state || '',
-      postalCode: suggestion.postalCode || '',
-      lat: suggestion.lat,
-      lng: suggestion.lng,
-    });
-  };
-
-  const handleClear = () => {
-    setInputValue('');
+  /** Clear everything — go back to blank input. */
+  const clearAll = useCallback(() => {
+    setConfirmedValue('');
+    setSearchInput('');
     setOptions([]);
-  };
+    setConfirmed(false);
+    onSelect(null);
+  }, [onSelect]);
+
+  const handleSelect = useCallback((_: string, option: any) => {
+    const suggestion = option as LocationSuggestion;
+    const isStateSuggestion = !suggestion.city && !!suggestion.state && !!parseStateInput(suggestion.state);
+
+    if (isStateSuggestion) {
+      // State selection — append to any existing confirmed states
+      const incoming = (suggestion.state ?? '').toUpperCase().split(',').map((s: string) => s.trim()).filter(Boolean);
+      const existing = confirmed && isStateModeValue(confirmedValue)
+        ? (parseStateInput(confirmedValue) || [])
+        : [];
+      const merged = Array.from(new Set([...existing, ...incoming]));
+      const newVal = merged.join(',');
+
+      setConfirmedValue(newVal);
+      setConfirmed(true);
+      setSearchInput('');
+      setOptions([]);
+      onSelect({ displayName: newVal, city: '', state: newVal, postalCode: '' });
+    } else {
+      // City selection — single value, replaces any previous selection
+      const display = suggestion.city && suggestion.state
+        ? `${suggestion.city}, ${suggestion.state}`
+        : suggestion.value || suggestion.label;
+      setConfirmedValue(display);
+      setConfirmed(true);
+      setSearchInput('');
+      setOptions([]);
+      onSelect({
+        displayName: display,
+        city: suggestion.city || '',
+        state: suggestion.state || '',
+        postalCode: suggestion.postalCode || '',
+        lat: suggestion.lat,
+        lng: suggestion.lng,
+      });
+    }
+  }, [confirmed, confirmedValue, onSelect]);
+
+  /** Remove one state from the confirmed value (or clear entirely if last). */
+  const handleRemoveState = useCallback((stateToRemove: string) => {
+    const states = parseStateInput(confirmedValue);
+    if (!states) { clearAll(); return; }
+    const remaining = states.filter((s) => s !== stateToRemove);
+    if (remaining.length === 0) { clearAll(); return; }
+    const newVal = remaining.join(',');
+    setConfirmedValue(newVal);
+    onSelect({ displayName: newVal, city: '', state: newVal, postalCode: '' });
+  }, [confirmedValue, clearAll, onSelect]);
 
   const autocompleteOptions = options.map((s) => ({
     ...s,
@@ -156,16 +200,64 @@ const LocationAutocomplete: React.FC<Props> = ({
       : s.label,
   }));
 
+  // ── State-mode: chips + always-visible "add more" input ──────────────────
+  if (confirmed && confirmedValue && isStateModeValue(confirmedValue)) {
+    const states = parseStateInput(confirmedValue) || [];
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', ...style }}>
+        {states.map((s) => (
+          <Tag
+            key={s}
+            closable
+            onClose={(e) => { e.preventDefault(); handleRemoveState(s); }}
+            color="blue"
+            style={{ margin: 0, userSelect: 'none' }}
+          >
+            {s}
+          </Tag>
+        ))}
+        {/* Input always stays visible so user can keep typing more states */}
+        <AutoComplete
+          value={searchInput}
+          options={autocompleteOptions}
+          onSearch={handleSearch}
+          onSelect={handleSelect}
+          notFoundContent={loading ? 'Searching…' : searchInput.length >= 2 ? 'No results' : null}
+          style={{ width: 70 }}
+        >
+          <Input size={size} placeholder="+ state" style={{ width: 70 }} />
+        </AutoComplete>
+      </div>
+    );
+  }
+
+  // ── City-mode: single chip, no extra input ────────────────────────────────
+  if (confirmed && confirmedValue) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', ...style }}>
+        <Tag
+          closable
+          onClose={(e) => { e.preventDefault(); clearAll(); }}
+          color="geekblue"
+          style={{ margin: 0, userSelect: 'none' }}
+        >
+          {confirmedValue}
+        </Tag>
+      </div>
+    );
+  }
+
+  // ── Unconfirmed: plain autocomplete input ─────────────────────────────────
   return (
     <AutoComplete
-      value={inputValue}
+      value={searchInput}
       options={autocompleteOptions}
       onSearch={handleSearch}
       onSelect={handleSelect}
       style={{ width: '100%', ...style }}
       allowClear
-      onClear={handleClear}
-      notFoundContent={loading ? 'Searching…' : inputValue.length >= 2 ? 'No results' : null}
+      onClear={clearAll}
+      notFoundContent={loading ? 'Searching…' : searchInput.length >= 2 ? 'No results' : null}
     >
       <Input size={size} placeholder={placeholder} />
     </AutoComplete>
@@ -173,3 +265,5 @@ const LocationAutocomplete: React.FC<Props> = ({
 };
 
 export default LocationAutocomplete;
+
+

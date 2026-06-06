@@ -9,6 +9,7 @@ import {
   Form,
   DatePicker,
   InputNumber,
+  Select,
   Typography,
   Space,
   Popconfirm,
@@ -21,7 +22,6 @@ import {
   EditOutlined,
   CheckOutlined,
   CloseOutlined,
-  CaretDownOutlined,
   CaretRightOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -70,6 +70,20 @@ export const SylectusLaneCard: React.FC<Props> = ({
       : null
   );
 
+  const handleDestSelect = (loc: LocationResult | null) => setDestLoc(loc);
+
+  // Apply display filters immediately without re-searching
+  const handleFilterChange = () => {
+    const values = form.getFieldsValue();
+    const params: SylectusSearchParams = {
+      ...lane.searchParams,
+      equipmentTypes: values.equipmentTypes ?? [],
+      minMiles: values.minMiles != null ? values.minMiles : undefined,
+      maxMiles: values.maxMiles != null ? values.maxMiles : undefined,
+    };
+    onUpdateParams(lane.id, params, lane.originDisplay, lane.destDisplay);
+  };
+
   const handleSubmit = () => {
     if (!originLoc) return;
     const values = form.getFieldsValue();
@@ -85,6 +99,9 @@ export const SylectusLaneCard: React.FC<Props> = ({
       loadTypes: [],
       freight: 'Both',
       maxWeight: values.maxWeight ? String(values.maxWeight) : '',
+      equipmentTypes: values.equipmentTypes ?? [],
+      minMiles: values.minMiles ?? undefined,
+      maxMiles: values.maxMiles ?? undefined,
     };
     const originDisplay = originLoc.displayName || `${originLoc.city}, ${originLoc.state}`;
     const destDisplay = destLoc ? (destLoc.displayName || `${destLoc.city}, ${destLoc.state}`) : '';
@@ -112,7 +129,7 @@ export const SylectusLaneCard: React.FC<Props> = ({
   return (
     <div
       style={{
-        border: `1.5px solid ${isActive ? '#1677ff' : lane.newCount > 0 ? '#52c41a' : '#e8e8e8'}`,
+        border: `1.5px solid ${isActive ? '#1677ff' : '#e8e8e8'}`,
         borderRadius: 8,
         background: isActive ? '#f0f7ff' : '#fff',
         boxShadow: isActive ? '0 2px 8px rgba(22,119,255,0.12)' : '0 1px 3px rgba(0,0,0,0.06)',
@@ -121,14 +138,14 @@ export const SylectusLaneCard: React.FC<Props> = ({
         userSelect: 'none',
       }}
       onClick={() => onActivate(lane.id)}
+      onDoubleClick={() => setFormOpen((v) => !v)}
     >
       <div
-        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}
-        onDoubleClick={() => setFormOpen((v) => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px' }}
       >
-        <div style={{ flex: '0 0 auto' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ flex: '0 0 auto' }}>
           {editingLabel ? (
-            <Space size={4}>
+            <Space size={4} onClick={(e) => e.stopPropagation()}>
               <Input
                 size="small"
                 value={labelDraft}
@@ -142,7 +159,7 @@ export const SylectusLaneCard: React.FC<Props> = ({
             </Space>
           ) : (
             <Space size={4}>
-              <Text strong style={{ fontSize: 13, color: isActive ? '#1677ff' : '#222' }}>{lane.label}</Text>
+              <Text style={{ fontSize: 13, fontWeight: formOpen ? 400 : 600, color: isActive ? '#1677ff' : '#222' }}>{lane.label}</Text>
               <Button
                 type="text"
                 size="small"
@@ -154,9 +171,25 @@ export const SylectusLaneCard: React.FC<Props> = ({
           )}
         </div>
 
-        <Text type="secondary" style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <Text type="secondary" style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: formOpen ? 400 : 500 }}>
           {routeSummary}
         </Text>
+
+        {/* Active filter badges */}
+        {(lane.searchParams.equipmentTypes?.length ?? 0) > 0 && (
+          <Tag color="red" style={{ fontSize: 10, padding: '0 4px', margin: 0 }}>
+            excl: {lane.searchParams.equipmentTypes!.join(', ')}
+          </Tag>
+        )}
+        {(lane.searchParams.minMiles != null || lane.searchParams.maxMiles != null) && (
+          <Tag color="purple" style={{ fontSize: 10, padding: '0 4px', margin: 0 }}>
+            {lane.searchParams.minMiles != null && lane.searchParams.maxMiles != null
+              ? `${lane.searchParams.minMiles}–${lane.searchParams.maxMiles} mi`
+              : lane.searchParams.minMiles != null
+              ? `≥${lane.searchParams.minMiles} mi`
+              : `≤${lane.searchParams.maxMiles} mi`}
+          </Tag>
+        )}
 
         {lane.isLoading && <Tag color="processing" style={{ fontSize: 11 }}>Searching…</Tag>}
         {lane.lastRefresh && !lane.isLoading && (
@@ -174,15 +207,16 @@ export const SylectusLaneCard: React.FC<Props> = ({
           />
         )}
 
+        <CaretRightOutlined
+          style={{
+            color: '#bbb',
+            fontSize: 9,
+            transition: 'transform 0.15s',
+            transform: formOpen ? 'rotate(90deg)' : 'none',
+            flexShrink: 0,
+          }}
+        />
         <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
-          <Tooltip title={formOpen ? 'Hide search' : 'Edit search'}>
-            <Button
-              size="small"
-              type={formOpen ? 'primary' : 'text'}
-              icon={formOpen ? <CaretDownOutlined /> : <CaretRightOutlined />}
-              onClick={() => setFormOpen((v) => !v)}
-            />
-          </Tooltip>
           <Tooltip title="Refresh">
             <Button
               size="small"
@@ -226,6 +260,9 @@ export const SylectusLaneCard: React.FC<Props> = ({
                   : dayjs(),
               ],
               maxWeight: lane.searchParams.maxWeight ? Number(lane.searchParams.maxWeight) : undefined,
+              equipmentTypes: lane.searchParams.equipmentTypes ?? [],
+              minMiles: lane.searchParams.minMiles ?? undefined,
+              maxMiles: lane.searchParams.maxMiles ?? undefined,
             }}
           >
             <Row gutter={[6, 6]} style={{ width: '100%', marginTop: 10 }}>
@@ -247,7 +284,7 @@ export const SylectusLaneCard: React.FC<Props> = ({
                   <LocationAutocomplete
                     placeholder="e.g. Detroit, MI"
                     initialValue={lane.destDisplay || (lane.searchParams.toCity ? `${lane.searchParams.toCity}, ${lane.searchParams.toState}` : '')}
-                    onSelect={(loc) => setDestLoc(loc)}
+                    onSelect={handleDestSelect}
                     size="small"
                   />
                 </div>
@@ -280,6 +317,60 @@ export const SylectusLaneCard: React.FC<Props> = ({
                   <Text style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Max wt (lbs)</Text>
                   <Form.Item name="maxWeight" style={{ margin: 0 }}>
                     <InputNumber size="small" min={0} placeholder="Any" style={{ width: '100%' }} />
+                  </Form.Item>
+                </div>
+              </Col>
+
+              <Col xs={24} sm={12} md={6}>
+                <div>
+                  <Text style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Exclude equipment</Text>
+                  <Form.Item name="equipmentTypes" style={{ margin: 0 }}>
+                    <Select
+                      mode="tags"
+                      size="small"
+                      placeholder="None excluded — type or pick"
+                      style={{ width: '100%' }}
+                      options={[
+                        { value: 'Van',           label: 'Van' },
+                        { value: 'Cargo Van',     label: 'Cargo Van' },
+                        { value: 'Sprinter Van',  label: 'Sprinter Van' },
+                        { value: 'Reefer',        label: 'Reefer' },
+                        { value: 'Flatbed',       label: 'Flatbed' },
+                        { value: 'Step Deck',     label: 'Step Deck' },
+                        { value: 'Large Straight', label: 'Large Straight' },
+                        { value: 'Small Straight', label: 'Small Straight' },
+                        { value: 'Tractor',       label: 'Tractor' },
+                      ]}
+                      tokenSeparators={[',']}
+                      onChange={(values: string[]) => {
+                        const currValues = form.getFieldsValue();
+                        const params: SylectusSearchParams = {
+                          ...lane.searchParams,
+                          equipmentTypes: values ?? [],
+                          minMiles: currValues.minMiles != null ? currValues.minMiles : undefined,
+                          maxMiles: currValues.maxMiles != null ? currValues.maxMiles : undefined,
+                        };
+                        onUpdateParams(lane.id, params, lane.originDisplay, lane.destDisplay);
+                      }}
+                    />
+                  </Form.Item>
+                </div>
+              </Col>
+
+              <Col xs={12} sm={6} md={2}>
+                <div>
+                  <Text style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Min mi</Text>
+                  <Form.Item name="minMiles" style={{ margin: 0 }}>
+                    <InputNumber size="small" min={0} placeholder="Any" style={{ width: '100%' }} onChange={handleFilterChange} />
+                  </Form.Item>
+                </div>
+              </Col>
+
+              <Col xs={12} sm={6} md={2}>
+                <div>
+                  <Text style={{ fontSize: 11, color: '#888', display: 'block', marginBottom: 2 }}>Max mi</Text>
+                  <Form.Item name="maxMiles" style={{ margin: 0 }}>
+                    <InputNumber size="small" min={0} placeholder="Any" style={{ width: '100%' }} onChange={handleFilterChange} />
                   </Form.Item>
                 </div>
               </Col>

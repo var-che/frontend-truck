@@ -19,6 +19,15 @@ export interface EmailTemplate {
   updatedAt: string; // ISO string
 }
 
+export interface EmailSnippet {
+  id: string;
+  /** Shortcut without the leading slash, e.g. "mc123" */
+  shortcut: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EmailContext {
   load?: SylectusLoad;
   driver?: Driver;

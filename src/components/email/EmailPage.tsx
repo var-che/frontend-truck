@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React from "react";
 import {
   Button,
   Card,
@@ -16,95 +16,20 @@ import {
 } from "@ant-design/icons";
 import EmailComposeForm from "./EmailComposeForm";
 import EmailTemplateEditor from "./EmailTemplateEditor";
+import { useAuth } from "../../context/AuthContext";
 
 const { Title, Text } = Typography;
-
-const NETLIFY_BASE =
-  process.env.REACT_APP_NETLIFY_URL || "https://truckaroosie-dev.netlify.app";
-
-const EXTENSION_ID =
-  process.env.REACT_APP_EXTENSION_ID || "obifncifgmneplklobmfbmhjahjfbkpa";
-
-// ---------------------------------------------------------------------------
-// Gmail token management (talks to extension)
-// ---------------------------------------------------------------------------
-function useGmailToken() {
-  const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [emailAddress, setEmailAddress] = useState<string | null>(null);
-
-  const connect = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res: any = await new Promise((resolve, reject) => {
-        if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
-          reject(new Error("Chrome extension not available"));
-          return;
-        }
-        chrome.runtime.sendMessage(
-          EXTENSION_ID,
-          { type: "GMAIL_GET_TOKEN" },
-          (response) => {
-            if (chrome.runtime.lastError) {
-              reject(chrome.runtime.lastError);
-            } else {
-              resolve(response);
-            }
-          }
-        );
-      });
-      if (res?.success && res?.token) {
-        setToken(res.token);
-        // Fetch user email for display
-        fetch(`${NETLIFY_BASE}/.netlify/functions/get-user-status`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ gmailToken: res.token }),
-        })
-          .then((r) => r.json())
-          .then((data) => {
-            if (data.email) setEmailAddress(data.email);
-          })
-          .catch(() => {});
-      } else {
-        antdMessage.error(res?.error || "Failed to get Gmail token.");
-      }
-    } catch (err: any) {
-      antdMessage.error(err?.message || "Extension not available.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const disconnect = useCallback(async () => {
-    if (!token) return;
-    try {
-      await new Promise<void>((resolve, reject) => {
-        chrome.runtime.sendMessage(
-          EXTENSION_ID,
-          { type: "GMAIL_REMOVE_TOKEN", token },
-          (response) => {
-            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-            else resolve();
-          }
-        );
-      });
-    } catch {
-      // silently ignore revoke errors
-    }
-    setToken(null);
-    setEmailAddress(null);
-    antdMessage.info("Gmail disconnected.");
-  }, [token]);
-
-  return { token, loading, emailAddress, connect, disconnect };
-}
 
 // ---------------------------------------------------------------------------
 // EmailPage
 // ---------------------------------------------------------------------------
 const EmailPage: React.FC = () => {
-  const { token, loading: tokenLoading, emailAddress, connect, disconnect } = useGmailToken();
+  const { gmailToken: token, userEmail: emailAddress, loading: tokenLoading, isAuthenticated, connect, disconnect } = useAuth();
+
+  const handleDisconnect = async () => {
+    await disconnect();
+    antdMessage.info("Gmail disconnected.");
+  };
 
   const dispatcherName =
     localStorage.getItem("dispatcher_settings_v1") || "";
@@ -132,7 +57,7 @@ const EmailPage: React.FC = () => {
               size="small"
               danger
               icon={<DisconnectOutlined />}
-              onClick={disconnect}
+          onClick={handleDisconnect}
             >
               Disconnect
             </Button>
@@ -143,7 +68,7 @@ const EmailPage: React.FC = () => {
             <Button
               type="primary"
               size="small"
-              loading={tokenLoading}
+              loading={tokenLoading && !isAuthenticated}
               onClick={connect}
             >
               Connect Gmail

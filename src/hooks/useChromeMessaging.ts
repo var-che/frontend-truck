@@ -126,6 +126,8 @@ export const useChromeMessaging = () => {
   const checkExtensionAvailability = useCallback(async () => {
     setCheckingConnection(true);
     console.log('[useChromeMessaging] Checking extension availability. Using ID:', EXTENSION_ID);
+    console.log('[useChromeMessaging] chrome available:', typeof chrome !== 'undefined');
+    console.log('[useChromeMessaging] chrome.runtime available:', typeof chrome !== 'undefined' && !!chrome?.runtime);
     try {
       // First try postMessage to check if extension is injected
       window.postMessage(
@@ -141,10 +143,12 @@ export const useChromeMessaging = () => {
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Try to send a message to the extension
+      console.log('[useChromeMessaging] Sending CONNECTION_CHECK to extension ID:', EXTENSION_ID);
       const response = await sendMessageToExtension({
         type: 'CONNECTION_CHECK',
       });
 
+      console.log('[useChromeMessaging] CONNECTION_CHECK response:', response);
       setExtensionConnected(true);
 
       // If we have information about a connected DAT tab OR DAT Test tab
@@ -164,7 +168,8 @@ export const useChromeMessaging = () => {
         setSylectusTabId(null);
       }
     } catch (error) {
-      console.error('Extension connection error:', error);
+      console.error('[useChromeMessaging] CONNECTION_CHECK failed:', error);
+      console.error('[useChromeMessaging] lastError message:', (error as any)?.message);
       setExtensionConnected(false);
       setDatTabConnected(false);
       setSylectusTabConnected(false);

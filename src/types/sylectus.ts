@@ -13,6 +13,10 @@ export interface SylectusSearchParams {
   maxCargo?: string;
   freight?: 'Both' | '3PL' | 'Alliance';
   refreshRate?: number;
+  // Client-side display filters (applied after data is returned)
+  equipmentTypes?: string[];
+  minMiles?: number;
+  maxMiles?: number;
 }
 
 export interface SylectusLoad {

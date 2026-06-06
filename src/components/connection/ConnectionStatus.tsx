@@ -1,44 +1,49 @@
-import { useEffect } from 'react';
+import React from 'react';
+import { Space, Tooltip, Typography } from 'antd';
 import { useChromeMessaging } from '../../hooks/useChromeMessaging';
+
+const { Text } = Typography;
+
+const Dot: React.FC<{ active: boolean }> = ({ active }) => (
+  <span
+    style={{
+      display: 'inline-block',
+      width: 8,
+      height: 8,
+      borderRadius: '50%',
+      background: active ? '#52c41a' : '#bfbfbf',
+      marginRight: 5,
+    }}
+  />
+);
 
 export const ConnectionStatus = () => {
   const {
     extensionConnected,
     datTabConnected,
-    datTabId,
     sylectusTabConnected,
-    sylectusTabId,
-    pongMessage,
-    pingDatTab,
   } = useChromeMessaging();
 
-  useEffect(() => {}, [extensionConnected, datTabConnected]);
-
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial' }}>
-      <h1>DAT Tab Connector</h1>
-      <div>
-        <input type="checkbox" checked={extensionConnected} readOnly />
-        <label>Connected to browser extension</label>
-      </div>
-      <div>
-        <input type="checkbox" checked={datTabConnected} readOnly />
-        <label>Connected to DAT tab {datTabId && `(ID: ${datTabId})`}</label>
-      </div>
-      <div>
-        <input type="checkbox" checked={sylectusTabConnected} readOnly />
-        <label>
-          Connected to Sylectus tab {sylectusTabId && `(ID: ${sylectusTabId})`}
-        </label>
-      </div>
-      <button
-        onClick={pingDatTab}
-        disabled={!datTabConnected}
-        style={{ marginTop: '10px', padding: '8px 12px' }}
-      >
-        Ping DAT Tab
-      </button>
-      {pongMessage && <p>Response: {pongMessage}</p>}
-    </div>
+    <Space size={16} style={{ lineHeight: 1 }}>
+      <Tooltip title={extensionConnected ? 'Extension connected' : 'Extension not detected'}>
+        <span style={{ cursor: 'default', whiteSpace: 'nowrap' }}>
+          <Dot active={extensionConnected} />
+          <Text type="secondary" style={{ fontSize: 12 }}>Ext</Text>
+        </span>
+      </Tooltip>
+      <Tooltip title={datTabConnected ? 'DAT tab open' : 'DAT tab not found'}>
+        <span style={{ cursor: 'default', whiteSpace: 'nowrap' }}>
+          <Dot active={datTabConnected} />
+          <Text type="secondary" style={{ fontSize: 12 }}>DAT</Text>
+        </span>
+      </Tooltip>
+      <Tooltip title={sylectusTabConnected ? 'Sylectus tab open' : 'Sylectus tab not found'}>
+        <span style={{ cursor: 'default', whiteSpace: 'nowrap' }}>
+          <Dot active={sylectusTabConnected} />
+          <Text type="secondary" style={{ fontSize: 12 }}>Sylectus</Text>
+        </span>
+      </Tooltip>
+    </Space>
   );
 };

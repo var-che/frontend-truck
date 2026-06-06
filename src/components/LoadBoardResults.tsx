@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Space, Alert, Card, Typography, Spin, Tabs } from 'antd';
+import { Button, Space, Alert, Card, Typography, Spin, Tabs, Tooltip } from 'antd';
 import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
@@ -246,6 +246,7 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
           {
             key: 'dat',
             label: 'DAT Power',
+            disabled: true,
             children: (
               <div style={{ textAlign: 'center' }}>
                 <Space
@@ -253,28 +254,20 @@ const LoadBoardResults: React.FC<LoadBoardResultsProps> = ({
                   size="middle"
                   style={{ width: '100%' }}
                 >
-                  {renderExtensionStatus()}
-
-                  <Button
-                    type="primary"
-                    loading={isPosting}
-                    onClick={onSearchDAT}
-                    size="large"
-                  >
-                    Search DAT Power
-                  </Button>
-
-                  {isPosting && (
-                    <Card style={{ textAlign: 'center' }}>
-                      <Spin size="large" />
-                      <div style={{ marginTop: 16 }}>
-                        <Text>Searching DAT Power...</Text>
-                      </div>
-                    </Card>
-                  )}
-
-                  {!isPosting &&
-                    renderSearchResult(datResult, datError, 'DAT Power')}
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="DAT Power integration is coming soon."
+                  />
+                  <Tooltip title="Coming soon">
+                    <Button
+                      type="primary"
+                      size="large"
+                      disabled
+                    >
+                      Search DAT Power
+                    </Button>
+                  </Tooltip>
                 </Space>
               </div>
             ),

@@ -12,15 +12,35 @@ code {
     monospace;
 }
 
-/* Sylectus new load highlight */
-.sylectus-new-row td {
-  background-color: #f6ffed !important;
-  animation: sylectus-flash 1.5s ease-in-out;
+/* Sylectus load table — bold by default ("unread" state) */
+.sylectus-loads-table .ant-table-row > td {
+  font-weight: 600;
 }
 
-@keyframes sylectus-flash {
-  0%   { background-color: #d9f7be; }
-  50%  { background-color: #f6ffed; }
-  100% { background-color: #f6ffed; }
+/* Alternating row stripe */
+.sylectus-loads-table .sylectus-stripe-row > td {
+  background: #f4f6fa !important;
+}
+
+/* Row hover — darker blue tint, pointer cursor */
+.sylectus-loads-table .ant-table-tbody .ant-table-row:hover > td {
+  background: #dce8fb !important;
+  cursor: pointer;
+}
+
+/* New loads — quick fade-in, no background colour change */
+.sylectus-new-row td {
+  animation: sylectus-fadein 0.45s ease-out;
+}
+
+@keyframes sylectus-fadein {
+  from { opacity: 0.2; }
+  to   { opacity: 1; }
+}
+
+/* Viewed/expanded rows — normal weight indicates "visited" */
+.sylectus-viewed-row td {
+  font-weight: 400 !important;
+  color: #595959 !important;
 }
 

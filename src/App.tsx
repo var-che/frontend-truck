@@ -18,6 +18,7 @@ import TrimbleRoutingPage from './components/routing/trimble/TrimbleRoutingPage'
 import { DATLoadsHandler } from './components/DATLoadsHandler';
 import EmailPage from './components/email/EmailPage';
 import SettingsPage from './components/SettingsPage';
+import { AuthProvider } from './context/AuthContext';
 
 import { App as AntApp, Layout, Button } from 'antd';
 import LanesContainerList from './components/LanesContainerList';
@@ -44,6 +45,7 @@ const App: React.FC = () => {
 
   return (
     <AntApp>
+      <AuthProvider>
       <MapProvider>
         <SearchResultsProvider>
           <DATLoadsHandler />
@@ -52,12 +54,7 @@ const App: React.FC = () => {
               <Layout>
                 <AppHeader />
                 <Content style={{ marginTop: 64, padding: '0 50px' }}>
-                  <div
-                    className="connection-status-wrapper"
-                    style={{ margin: '16px' }}
-                  >
-                    <DatConnectionStatus onConnectionChange={() => {}} />
-                  </div>
+
                   <Routes>
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route
@@ -92,6 +89,7 @@ const App: React.FC = () => {
           </TrimbleRoutingProvider>
         </SearchResultsProvider>
       </MapProvider>
+      </AuthProvider>
     </AntApp>
   );
 };
@@ -127,6 +125,7 @@ const AppHeader: React.FC = () => {
       <Button onClick={() => navigate('/email')}>Email</Button>
       <Button onClick={() => navigate('/settings')}>Settings</Button>
       <Button onClick={() => navigate('/boards')}>Boards connection</Button>
+      <DatConnectionStatus />
     </Header>
   );
 };

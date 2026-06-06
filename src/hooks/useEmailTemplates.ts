@@ -1,6 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { EmailTemplate } from "../types/email";
+import { useAuth } from "../context/AuthContext";
+import * as UserDataService from "../services/UserDataService";
 
 const STORAGE_KEY = "email_templates_v1";
 
@@ -82,7 +84,27 @@ function saveToStorage(templates: EmailTemplate[]): void {
 }
 
 export function useEmailTemplates() {
+  const { gmailToken } = useAuth();
   const [templates, setTemplates] = useState<EmailTemplate[]>(loadFromStorage);
+
+  // Cloud sync: load from cloud when token becomes available; migrate localStorage on first use
+  useEffect(() => {
+    if (!gmailToken) return;
+    UserDataService.getTemplates(gmailToken)
+      .then((cloudTemplates) => {
+        if (cloudTemplates.length > 0) {
+          setTemplates(cloudTemplates);
+          saveToStorage(cloudTemplates);
+        } else {
+          // No cloud data yet — push localStorage items to cloud (one-time migration)
+          const local = loadFromStorage();
+          local.forEach((t) => {
+            UserDataService.upsertTemplate(gmailToken, t).catch(() => {});
+          });
+        }
+      })
+      .catch(() => { /* silently fall back to localStorage */ });
+  }, [gmailToken]);
 
   const createTemplate = useCallback(
     (data: Omit<EmailTemplate, "id" | "createdAt" | "updatedAt">): EmailTemplate => {
@@ -91,9 +113,10 @@ export function useEmailTemplates() {
       const next = [...templates, tpl];
       setTemplates(next);
       saveToStorage(next);
+      if (gmailToken) UserDataService.upsertTemplate(gmailToken, tpl).catch(() => {});
       return tpl;
     },
-    [templates]
+    [templates, gmailToken]
   );
 
   const updateTemplate = useCallback(
@@ -103,8 +126,12 @@ export function useEmailTemplates() {
       );
       setTemplates(next);
       saveToStorage(next);
+      if (gmailToken) {
+        const updated = next.find((t) => t.id === id);
+        if (updated) UserDataService.upsertTemplate(gmailToken, updated).catch(() => {});
+      }
     },
-    [templates]
+    [templates, gmailToken]
   );
 
   const deleteTemplate = useCallback(
@@ -112,8 +139,9 @@ export function useEmailTemplates() {
       const next = templates.filter((t) => t.id !== id);
       setTemplates(next);
       saveToStorage(next);
+      if (gmailToken) UserDataService.deleteTemplate(gmailToken, id).catch(() => {});
     },
-    [templates]
+    [templates, gmailToken]
   );
 
   return { templates, createTemplate, updateTemplate, deleteTemplate };

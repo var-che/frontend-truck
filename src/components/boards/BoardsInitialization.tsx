@@ -21,9 +21,8 @@ const BoardsInitialization: React.FC = () => {
     if (window.chrome && window.chrome.runtime) {
       try {
         const newPort = chrome.runtime.connect(
-          // Use your extension ID here
+          process.env.REACT_APP_EXTENSION_ID || 'dglpcheabojkebkoninofbpgnilkaeek',
           // This ID is typically found in the Chrome extension management page
-          'YOUR_EXTENSION_ID',
           { name: 'truckarooskie-dat-connection' },
         );
 
@@ -66,7 +65,7 @@ const BoardsInitialization: React.FC = () => {
     } else if (window.chrome && window.chrome.runtime) {
       try {
         // Try to reconnect if port is not available
-        const newPort = chrome.runtime.connect('YOUR_EXTENSION_ID', {
+        const newPort = chrome.runtime.connect(process.env.REACT_APP_EXTENSION_ID || 'dglpcheabojkebkoninofbpgnilkaeek', {
           name: 'truckarooskie-dat-connection',
         });
         setPort(newPort);
